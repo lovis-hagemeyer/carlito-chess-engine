@@ -38,19 +38,6 @@ impl Bitboard {
     pub fn is_set(&self, square: u8) -> bool {
         ((1 << square) & self.b) != 0
     }
-
-    pub fn print(&self) {
-        for i in 0..8 {
-            for j in 0..8 {
-                if self.is_set(8*i+j) {
-                    print!("1 ");
-                } else {
-                    print!("0 ");
-                }
-            }
-            println!();
-        }
-    }
 }
 
 impl fmt::Debug for Bitboard {
