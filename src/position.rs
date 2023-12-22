@@ -1,6 +1,6 @@
 use crate::bitboard::Bitboard;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Pieces {
     Pawn,
     Knight,
@@ -11,7 +11,7 @@ pub enum Pieces {
     NoPiece
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Color {
     White,
     Black
@@ -181,6 +181,41 @@ impl Position {
     }
 
     fn parse_en_passant(&mut self, s: &str) -> Result<(), ()> {
+
+        if s == "-" {
+            self.en_passant_file = None;
+            return Ok(());
+        }
+
+        let square = Position::parse_square(s)?;
+
+        let rank = square / 8;
+        let file = square % 8;
+
+        if (self.current_player == White && rank != 2) || (self.current_player == Black && rank != 5) {
+            return Err(());
+        }
+
+        //only save en passant square, if there is a pseudo legal en passant move
+
+        let from_rank = if self.current_player == White { rank + 1 } else { rank - 1 };
+
+        //check if there is an enemy pawn above/below the en passant target square
+        if !((self.squares[(from_rank*8+file) as usize] == Pawn) && (self.square_color(from_rank*8+file) != self.current_player)) {
+            self.en_passant_file = None;
+            return Ok(());
+        }
+
+        //check if there are own pawns next to the enemy pawn
+        let mut from_squares = [-1,1].into_iter().map(|offset| offset + file as i32).filter(|x| *x <= 7 && *x >= 0).map(|x| x as u8 + 8*from_rank);
+        let pawn_on_from_square = from_squares.any(|x| self.squares[x as usize] == Pawn && self.current_player == self.square_color(x));
+
+        if pawn_on_from_square {
+            self.en_passant_file = Some(file);
+        } else {
+            self.en_passant_file = None;
+        }
+
         Ok(())
     }
 
@@ -201,8 +236,39 @@ impl Position {
         Ok(res)
     }
 
-    fn parse_square(s: &str) -> Result<u8, ()> {
-        Ok((0))
+    pub fn parse_square(s: &str) -> Result<u8, ()> {
+
+        let mut str_iter = s.chars();
+
+        let first_char = str_iter.next().ok_or(())?;
+        let second_char = str_iter.next().ok_or(())?;
+        
+        if str_iter.next().is_some() {
+            return Err(());
+        }
+
+        if !"abcdefgh".contains(first_char) {
+            return Err(());
+        }
+
+        if !"12345678".contains(second_char) {
+            return Err(());
+        }     
+
+        let file = first_char.to_digit(18).unwrap()-10;
+        let rank = 8-second_char.to_digit(10).unwrap();
+
+        println!("{}", 8*rank+file);
+
+        Ok((8*rank+file) as u8)
     }
+
+    pub fn square_color(&self, square: u8) -> Color {
+        if self.white.contains(square) {
+            White
+        } else {
+            Black
+        }
+    } 
 }
 

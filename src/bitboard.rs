@@ -13,7 +13,7 @@ pub struct BitboardIterator {
 impl Bitboard {
     pub fn from_coords(x: u8, y: u8) -> Bitboard {
         Bitboard { 
-            b: 1 << 8*y+x 
+            b: 1 << (8*y+x) 
         }
     }
 
@@ -35,7 +35,7 @@ impl Bitboard {
         }
     }
 
-    pub fn is_set(&self, square: u8) -> bool {
+    pub fn contains(&self, square: u8) -> bool {
         ((1 << square) & self.b) != 0
     }
 }
@@ -46,7 +46,7 @@ impl fmt::Debug for Bitboard {
         for i in 0..8 {
             writeln!(f)?;
             for j in 0..8 {
-                if self.is_set(8*i+j) {
+                if self.contains(8*i+j) {
                     write!(f, "1 ")?;
                 } else {
                     write!(f, "0 ")?;
