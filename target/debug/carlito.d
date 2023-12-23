@@ -1,0 +1,1 @@
+/home/lovis/projects/carlito/target/debug/carlito: /home/lovis/projects/carlito/src/bitboard.rs /home/lovis/projects/carlito/src/chess_move.rs /home/lovis/projects/carlito/src/main.rs /home/lovis/projects/carlito/src/position.rs /home/lovis/projects/carlito/src/uci.rs

@@ -11,9 +11,15 @@ pub struct BitboardIterator {
 }
 
 impl Bitboard {
-    pub fn from_coords(x: u8, y: u8) -> Bitboard {
+    pub fn new() -> Bitboard {
+        Bitboard {
+            b: 0
+        }
+    }
+
+    pub fn from_coords(file: u8, rank: u8) -> Bitboard {
         Bitboard { 
-            b: 1 << (8*y+x) 
+            b: 1 << (8*rank+file) 
         }
     }
 
@@ -37,6 +43,10 @@ impl Bitboard {
 
     pub fn contains(&self, square: u8) -> bool {
         ((1 << square) & self.b) != 0
+    }
+
+    pub fn get_knight_moves(square: u8) -> Bitboard {
+        KNIGHT_MOVES_TABLE[square as usize]
     }
 }
 
@@ -108,4 +118,43 @@ impl std::ops::Not for Bitboard {
     fn not(self) -> Self::Output {
         Bitboard {b: !self.b }
     }
+}
+
+
+static KNIGHT_MOVES_TABLE: [Bitboard; 64] = get_knight_moves_table();
+
+const fn get_knight_moves_table() -> [Bitboard; 64] {
+    let mut table = [Bitboard{ b: 0 }; 64];
+
+    let mut i = 0;
+    while i < 64 {
+
+        let offsets = [(-1,-2), (-2,-1), (1, -2), (-2, 1), (-1, 2), (2, -1), (1,2), (2,1)];
+
+        let knight_rank = i/8;
+        let knight_file = i%8;
+
+        let mut result: u64 = 0;
+
+        let mut j = 0;
+        while j < offsets.len() {
+            
+            let rank = knight_rank + offsets[j].0;
+            let file = knight_file + offsets[j].1;
+
+            if 0 <= rank && rank <= 7 && 0 <= file && file <= 7 {
+                result |= 1 << (file + rank*8);
+            }
+
+            j += 1;
+        }
+
+        table[i as usize] = Bitboard {
+            b: result
+        };
+
+        i += 1;
+    }
+
+    table
 }

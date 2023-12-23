@@ -1,7 +1,7 @@
 use crate::bitboard::Bitboard;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Pieces {
+pub enum Piece {
     Pawn,
     Knight,
     Bishop,
@@ -17,19 +17,13 @@ pub enum Color {
     Black
 }
 
-use Pieces::*;
+use Piece::*;
 
-
-const WHITE_CASTLE_KINGSIDE: u8 = 1 << 0;
-const WHITE_CASTLE_QUEENSIDE: u8 = 1 << 1;
-const BLACK_CASTLE_KINGSIDE: u8 = 1 << 2;
-const BLACK_CASTLE_QUEENSIDE: u8 = 1 << 3;
-
-const START_FEN: &str = "";
+const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 #[derive(Debug)]
 pub struct Position {
-    squares: [Pieces; 64],
+    squares: [Piece; 64],
 
     bb: [Bitboard; 6],
     
@@ -263,12 +257,16 @@ impl Position {
         Ok((8*rank+file) as u8)
     }
 
+
+    //TODO refactor to -> Option<Color>
     pub fn square_color(&self, square: u8) -> Color {
         if self.white.contains(square) {
             White
         } else {
             Black
         }
-    } 
+    }
+
+    
 }
 
