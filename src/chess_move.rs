@@ -15,7 +15,7 @@ enum SpecialMoveType {
     Castling
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct Move {
     /**
      * move format:
@@ -34,7 +34,7 @@ pub struct Move {
 impl Move {
     pub fn new(from: u8, to: u8) -> Move {
         Move {
-            m: from as u16 | (to as u16) << 6
+            m: from as u16 | (to as u16) << 6 | (SpecialMoveType::None as u16) << 14
         }
     } 
 
@@ -96,6 +96,32 @@ impl Move {
                 }
             )
         }
+    }
+}
+
+impl std::fmt::Debug for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+        write!(f, "from: {:?}, to: {:?}, is en passant?: {:?}, castling type: {:?}, promote_to: {:?}", self.from(), self.to(), self.is_en_passant(), self.castling_type(), self.promote_to())?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+        write!(f, "{}", Position::square_to_string(self.from()))?;
+        write!(f, "{}", Position::square_to_string(self.to()))?;
+        if let Some(p) = self.promote_to() {
+            write!(f, "{}", match p {
+                Piece::Bishop => "b",
+                Piece::Knight => "n",
+                Piece::Queen => "q",
+                Piece::Rook => "r",
+                _ => panic!("wrong promotion piece (this shouldn't be possible)")
+            })?;
+        }
+        Ok(())
     }
 }
 

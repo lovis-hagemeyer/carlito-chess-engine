@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct Bitboard {
     b: u64
 }
@@ -24,16 +24,6 @@ pub enum Direction {
 
 use Direction::*;
 
-/*#[derive(Copy, Clone, Debug)]
-enum LineType {
-    Diagonal,
-    AntiDiagonal,
-    Rank,
-    File
-}
-
-use LineType::*;*/
-
 impl Bitboard {
     pub const fn new() -> Bitboard {
         Bitboard {
@@ -51,6 +41,10 @@ impl Bitboard {
         Bitboard {
             b: 1 << square
         }
+    }
+
+    pub fn from_squares(squares: &[u8]) -> Bitboard {
+        squares.iter().fold(Bitboard::new(), |bitboard, square| { bitboard | Bitboard::from_square(*square) })
     }
 
     pub const fn from_u64(bb: u64) -> Bitboard {
@@ -86,20 +80,28 @@ impl Bitboard {
         self.b == 0
     }
 
-    pub fn file(f: u8) -> Bitboard {
+    pub const fn count_squares(&self) -> u32 {
+        self.b.count_ones()
+    }
+
+    pub const fn file(f: u8) -> Bitboard {
         Bitboard {
             b: 0x0101010101010101 << f
         }
     }
 
-    pub fn rank(r: u8) -> Bitboard {
+    pub const fn rank(r: u8) -> Bitboard {
         Bitboard {
-            b: 0xff << r*8
+            b: 0xff << (r*8)
         }
     }
 
     pub fn line(s1: u8, s2: u8) -> Bitboard {
         SQUARE_SQUARE_LINE_TABLE[s1 as usize][s2 as usize]
+    }
+
+    pub fn in_between(s1: u8, s2: u8) -> Bitboard {
+        BETWEEN_TABLE[s1 as usize][s2 as usize]
     }
 
     pub fn is_aligned(s1: u8, s2: u8, s3: u8) -> bool {
@@ -110,38 +112,43 @@ impl Bitboard {
        Bitboard::diagonal_attacks(square, occupied) | Bitboard::antidiagonal_attacks(square, occupied)
     }
 
-    /*pub fn rook_attacks(square: u8, occupied: Bitboard) -> Bitboard {
+    pub fn rook_attacks(square: u8, occupied: Bitboard) -> Bitboard {
         Bitboard::rank_attacks(square, occupied) | Bitboard::file_attacks(square, occupied)
-    }*/
+    }
 
     pub fn knight_attacks(square: u8) -> Bitboard {
         KNIGHT_ATTACKS_TABLE[square as usize]
     }
     
+    pub fn king_attacks(square: u8) -> Bitboard {
+        KING_ATTACKS_TABLE[square as usize]
+    }
+
     fn diagonal_attacks(square: u8, occupied: Bitboard) -> Bitboard {
-        //println!("{:?}", DIAGONALS_TABLE[square as usize][0]);
-        let index = (u64::overflowing_mul((DIAGONALS_TABLE[square as usize][0] & occupied).b, Bitboard::file(2).b).0 >> 56) & 0x3f;
-        println!("{:?}", index);
-        println!("{:?}", DIAGONALS_TABLE[square as usize][0] & occupied);
-        println!("{:?}", Bitboard::from_u64(u64::overflowing_mul((DIAGONALS_TABLE[square as usize][0] & occupied).b, Bitboard::file(2).b).0));
-        return DIAGONALS_TABLE[square as usize][0] & KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize];
+        let index = u64::overflowing_mul((DIAGONALS_TABLE[square as usize][0] & occupied).b, Bitboard::file(1).b).0 >> 58;
+        KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize] & DIAGONALS_TABLE[square as usize][0]
     }
 
     fn antidiagonal_attacks(square: u8, occupied: Bitboard) -> Bitboard {
-        //println!("{:?}", DIAGONALS_TABLE[square as usize][1]);
-        let index = (u64::overflowing_mul((DIAGONALS_TABLE[square as usize][1] & occupied).b, Bitboard::file(2).b).0 >> 56) & 0x3f;
-        return DIAGONALS_TABLE[square as usize][1] & KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize];
+        let index = u64::overflowing_mul((DIAGONALS_TABLE[square as usize][1] & occupied).b, Bitboard::file(1).b).0 >> 58;
+        KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize] & DIAGONALS_TABLE[square as usize][1]
     }
 
     fn rank_attacks(square: u8, occupied: Bitboard) -> Bitboard {
-        let index = ((Bitboard::rank(square / 8) & occupied).b * Bitboard::file(2).b) >> 58;
-        return Bitboard::rank(square / 8) & KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize];
-
+        let index = ((Bitboard::rank(square / 8) & occupied).b >> ((square / 8)*8+1)) & 0x3f;
+        KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize] & Bitboard::rank(square / 8)
     }
 
-    /*fn file_attacks(square: u8, occupied: Bitboard) -> Bitboard {
+    fn file_attacks(square: u8, occupied: Bitboard) -> Bitboard {
+        let c2h7_diagonal: u64 = 0x0080402010080400;
 
-    }*/
+        let a_file_occ = Bitboard::file(0).b & (occupied.b >> (square%8));
+        let index = u64::overflowing_mul(c2h7_diagonal, a_file_occ).0 >> 58;
+        
+        Bitboard {
+            b: KINDERGARTEN_FILE_ATTACKS_TABLE[(square/8) as usize][index as usize].b << (square%8) 
+        }
+    }
 }
 
 impl fmt::Debug for Bitboard {
@@ -173,6 +180,19 @@ impl Direction {
             DownLeft => UpRight,
             Left => Right,
             UpLeft => DownRight
+        }
+    }
+
+    pub const fn offset(&self) -> i8 {
+        match *self {
+            Up => -8,
+            UpRight => -7,
+            Right => 1,
+            DownRight => 9,
+            Down => 8,
+            DownLeft => 7,
+            Left => -1,
+            UpLeft => -9
         }
     }
 }
@@ -238,10 +258,12 @@ impl std::ops::Not for Bitboard {
  */
 
 static KNIGHT_ATTACKS_TABLE: [Bitboard; 64] = get_knight_attacks_table(); //512B
+static KING_ATTACKS_TABLE: [Bitboard; 64] = get_king_attacks_table(); //512B 
 static SQUARE_SQUARE_LINE_TABLE: [[Bitboard; 64]; 64] = get_square_square_line_table(); //32KByte
+static BETWEEN_TABLE: [[Bitboard; 64]; 64] = get_between_table(); //32KByte
 static DIAGONALS_TABLE: [[Bitboard; 2]; 64] = get_diagonals_table(); //1KByte
 static KINDERGARTEN_ATTACKS_TABLE: [[Bitboard; 64]; 8] = get_kindergarten_attacks_table(); //4KByte
-
+static KINDERGARTEN_FILE_ATTACKS_TABLE: [[Bitboard; 64]; 8] = get_kindergarten_file_attacks_table(); //4KByte
 
 const fn get_knight_attacks_table() -> [Bitboard; 64] {
     let mut table = [Bitboard{ b: 0 }; 64];
@@ -274,6 +296,30 @@ const fn get_knight_attacks_table() -> [Bitboard; 64] {
         };
 
         i += 1;
+    }
+
+    table
+}
+
+const fn get_king_attacks_table() -> [Bitboard; 64] {
+    let mut table = [Bitboard::new(); 64];
+
+    let mut square = 0;
+    while square < 64 {
+        let bb = Bitboard::from_square(square);
+
+        let mut result: u64 = 0;
+        
+        let dirs = [Up, UpRight, Right, DownRight, Down, DownLeft, Left, UpLeft];
+        let mut i = 0;
+        while i < dirs.len() {
+            result |= (bb.shift(dirs[i])).b;
+            i += 1;
+        }
+        
+        table[square as usize] = Bitboard::from_u64(result);
+        
+        square += 1;
     }
 
     table
@@ -361,7 +407,7 @@ const fn get_kindergarten_attacks_table() -> [[Bitboard; 64]; 8] {
             let mut attacked_square: i32 = square-1;
             while attacked_square >= 0 {
                 res |= 1 << attacked_square;
-                if (attacked_square as u8) & occ != 0 {
+                if (1 << attacked_square) & occ != 0 {
                     break;
                 }
                 attacked_square -= 1;
@@ -371,13 +417,11 @@ const fn get_kindergarten_attacks_table() -> [[Bitboard; 64]; 8] {
             attacked_square = square + 1;
             while attacked_square <= 7 {
                 res |= 1 << attacked_square;
-                if (attacked_square as u8) & occ != 0 {
+                if (1 << attacked_square) & occ != 0 {
                     break;
                 }
                 attacked_square += 1;
             }
-
-            //TODO
 
             let mut j = 0;
             while j < 8 {
@@ -391,6 +435,64 @@ const fn get_kindergarten_attacks_table() -> [[Bitboard; 64]; 8] {
         }
 
         index += 1;
+    }
+
+    table
+}
+
+const fn get_kindergarten_file_attacks_table() -> [[Bitboard; 64]; 8] {
+    let rank_attack_table = get_kindergarten_attacks_table();
+    let mut table = [[Bitboard::new(); 64]; 8];
+
+    let mut index = 0;
+    while index < 64 {
+
+        let mut square = 0;
+        while square < 8 {
+
+            let rank_attack = rank_attack_table[7-square][index].b & Bitboard::rank(0).b;
+            let a1h8_diagonal: u64 = 0x8040201008040201;
+
+            let file_attack = (u64::overflowing_mul(rank_attack, a1h8_diagonal).0 >> 7) & Bitboard::file(0).b;
+
+            table[square][index] = Bitboard::from_u64(file_attack);
+
+            square += 1;
+        }
+
+        index += 1;
+    }
+
+    table
+}
+
+const fn get_between_table() -> [[Bitboard; 64]; 64] {
+    let mut table = [[Bitboard::new(); 64]; 64];
+
+    let mut square1 = 0;
+    while square1 < 64 {
+
+        let directions = [Up, UpRight, Right, DownRight, Down, DownLeft, Left, UpLeft];
+        let mut i = 0;
+        while i < 8 {
+
+            let mut in_between = Bitboard::new();
+
+            let mut square_bb = Bitboard::from_square(square1);
+
+            while !square_bb.is_empty() {
+
+                in_between = Bitboard::from_u64(square_bb.b | in_between.b);
+
+                table[square1 as usize][square_bb.b.trailing_zeros() as usize] = in_between;
+
+                square_bb = square_bb.shift(directions[i]);
+            }
+
+            i += 1;
+        }
+
+        square1 += 1
     }
 
     table

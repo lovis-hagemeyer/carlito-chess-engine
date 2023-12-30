@@ -1,0 +1,6 @@
+clean code:
+- new type for square?
+
+testing:
+- perft testing with hashmap
+- (write test functions with macros for prettier output and multithreading when using cargo test)
