@@ -54,6 +54,31 @@ impl Move {
         }
     }
 
+    pub fn from_string(string: &str, pos: &mut Position) -> Result<Move, ()> {
+        //check for non ascii chararcters right away, so we can safely index into the string
+        if !string.is_ascii() {
+            return Err(());
+        }
+
+        let from = Position::parse_square(string.get(0..2).ok_or(())?)?;
+        let to = Position::parse_square(string.get(2..4).ok_or(())?)?;
+        let promote_to = string.chars().nth(5).map(|c| match c {
+            'q' => Ok(Piece::Queen),
+            'r' => Ok(Piece::Rook),
+            'b' => Ok(Piece::Bishop),
+            'n' => Ok(Piece::Knight),
+            _ => Err(())
+        }).transpose()?;
+
+        for m in pos.legal_moves() {
+            if m.from() == from && m.to() == to && m.promote_to() == promote_to {
+                return Ok(m);
+            }
+        }
+
+        Err(())
+    }
+
     pub fn from(&self) -> u8 {
         (self.m & 0x3f) as u8
     }

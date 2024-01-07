@@ -1,5 +1,7 @@
 clean code:
 - new type for square?
+- Option<Piece> intead of Piece::NoPiece ?
+- consistent Player/Color nomenclature
 
 testing:
 - perft testing with hashmap

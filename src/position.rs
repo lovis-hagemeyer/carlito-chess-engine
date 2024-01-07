@@ -35,7 +35,7 @@ use Piece::*;
 
 const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct StackFrame {
     castling_rights: u8,
 
@@ -48,7 +48,7 @@ struct StackFrame {
     pinned: Bitboard,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Position {
     squares: [Piece; 64],
 
@@ -72,7 +72,6 @@ impl Position {
     /*
      * getters
      */
-    //TODO replace every manual calculation with getters
 
     pub fn pieces(&self, piece: Piece, player: Color) -> Bitboard {
         self.color_bb[player as usize] & self.piece_bb[piece as usize]
@@ -92,6 +91,10 @@ impl Position {
 
     pub fn king_square(&self, player: Color) -> u8 {
         self.pieces(King, player).squares().next().expect("each player should always have a king on the board.")
+    }
+
+    pub fn current_player(&self) -> Color {
+        self.current_player
     }
 
 
@@ -274,7 +277,7 @@ impl Position {
         Ok(())
     }
 
-    fn parse_int(s: &str, max_val: u32) -> Result<u32, ()> {
+    pub fn parse_int(s: &str, max_val: u32) -> Result<u32, ()> {
         let mut res: u32 = 0;
         
         for c in s.chars() {
