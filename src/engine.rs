@@ -44,8 +44,12 @@ struct SearchData {
     evaluator: Evaluator,
     search_aborted: bool,
     nodes: u64,
-    killer_moves: Vec<(Move, Move)>,
+    move_sorter: MoveSorter,
     ttable: TTable
+}
+
+struct MoveSorter {
+    killer_moves: Vec<(Move, Move)>,
 }
 
 #[derive(Debug, Clone)]
@@ -144,7 +148,7 @@ impl Engine {
             evaluator: Evaluator::new(),
             search_aborted: false,
             nodes: 0,
-            killer_moves: Vec::new(),
+            move_sorter: MoveSorter::new(),
             ttable
         };
 
@@ -216,7 +220,7 @@ impl Engine {
         data.ttable
     }
 
-    fn search(position: &mut Position, depth: u16, ply: u32, mut alpha: Score, beta: Score, pv_node: bool, data: &mut SearchData, thread_data: &ThreadData) -> Score {
+    fn search(position: &mut Position, depth: u16, ply: u16, mut alpha: Score, beta: Score, pv_node: bool, data: &mut SearchData, thread_data: &ThreadData) -> Score {
         
         if thread_data.stop.load(atomic::Ordering::Acquire) {
             data.search_aborted = true;
@@ -231,7 +235,7 @@ impl Engine {
             return Score::from_centi_pawns(0);
         }
 
-        let mut moves = position.legal_moves();
+        let moves = position.legal_moves();
         
         if moves.len() == 0 {
             if position.is_attacked(position.king_square(position.current_player()), position.current_player()) {
@@ -245,13 +249,11 @@ impl Engine {
             return data.evaluator.evaluate(position);
         }
 
-
-        let mut sorted_moves = 0;
+        let ttable_move;
 
         //transposition table look up
         if let Some(table_entry) = data.ttable.lookup(position.hash()) {
             if table_entry.depth == depth {
-                //TODO account for search instabilities when using pvs. (see Calito)
                 match table_entry.entry_type {
                     ttable::EntryType::Exact => {
                         if ply == 0 {
@@ -272,59 +274,26 @@ impl Engine {
                 }
             }
 
-            if table_entry.entry_type == EntryType::Lower || table_entry.entry_type == EntryType::Exact {
-                for i in 0..moves.len() {
-                    if moves[i] == table_entry.best_move {
-                        moves.swap(sorted_moves, i);
-                        sorted_moves += 1;
-                        break;
-                    }
-                }
-            }
-        }
-
-
-        //killer moves
-        if data.killer_moves.len() > ply as usize {
-            for i in sorted_moves..moves.len() {
-                if moves[i] == data.killer_moves[ply as usize].0 {
-                    moves.swap(sorted_moves, i);
-                    sorted_moves += 1;
-                    break;
-                }
-            }
-
-            for i in sorted_moves..moves.len() {
-                if moves[i] == data.killer_moves[ply as usize].1 {
-                    moves.swap(sorted_moves, i);
-                    //sorted_moves += 1;
-                    break;
-                }
-            }
-
+            ttable_move = Some(table_entry.best_move);
         } else {
-            data.killer_moves.push((Move::new(0,0), Move::new(0,0)));
+            ttable_move = None;
         }
-
 
         let mut best_move = moves[0];
 
-        for (i, m) in moves.into_iter().enumerate() {
+        for (i, m) in data.move_sorter.sort(moves, ply, ttable_move).into_iter().enumerate() {
             position.make_move(m);
 
             let mut move_score;
             
-            if pv_node {
-                if i == 0 {
+
+            if pv_node && i != 0 {
+                move_score = -Engine::search(position, depth - 1, ply + 1, - (Score { s: (alpha.s + 1) }), -alpha, false, data, thread_data);
+                if move_score > alpha {
                     move_score = -Engine::search(position, depth - 1, ply + 1, -beta, -alpha, true,  data, thread_data);
-                } else {
-                    move_score = -Engine::search(position, depth - 1, ply + 1, - (Score { s: (alpha.s + 1) }), -alpha, false,  data, thread_data);
-                    if move_score > alpha {
-                        move_score = -Engine::search(position, depth - 1, ply + 1, -beta, -alpha, true,  data, thread_data);
-                    }
                 }
             } else {
-                move_score = -Engine::search(position, depth - 1, ply + 1, -beta, -alpha, false,  data, thread_data)
+                move_score = -Engine::search(position, depth - 1, ply + 1, -beta, -alpha, pv_node, data, thread_data);
             }
 
 
@@ -336,10 +305,7 @@ impl Engine {
 
                 if alpha >= beta {
 
-                    if data.killer_moves[ply as usize].0 != m {
-                        data.killer_moves[ply as usize].1 = data.killer_moves[ply as usize].0;
-                        data.killer_moves[ply as usize].0 = m;
-                    }
+                    data.move_sorter.cut_off_move(m, ply);
 
                     data.ttable.insert(position.hash(), EntryType::Lower, move_score, best_move, depth);
                     
@@ -366,5 +332,47 @@ impl Engine {
 impl Drop for Engine {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+impl MoveSorter {
+    pub fn new() -> MoveSorter {
+        MoveSorter {
+            killer_moves: Vec::new()
+        }
+    }
+
+    fn move_to_front(moves: &mut [Move], m: Move, front_index: &mut usize) {
+        for i in *front_index..moves.len() {
+            if moves[i] == m 
+            {
+                moves.swap(*front_index, i);
+                *front_index += 1;
+            }
+        }
+    }
+
+    pub fn sort(&mut self, mut moves: Vec<Move>, ply: u16, ttable_move: Option<Move>) -> Vec<Move> {
+        let mut sorted_moves = 0;
+        
+        if let Some(m) = ttable_move {
+            Self::move_to_front(&mut moves, m, &mut sorted_moves);
+        }
+
+        if self.killer_moves.len() > ply as usize {
+            Self::move_to_front(&mut moves, self.killer_moves[ply as usize].0, &mut sorted_moves);
+            Self::move_to_front(&mut moves, self.killer_moves[ply as usize].1, &mut sorted_moves);
+        } else {
+            self.killer_moves.push((Move::new(0,0), Move::new(0,0)));
+        }
+
+        moves
+    }
+
+    pub fn cut_off_move(&mut self, m: Move, ply: u16) {
+        if self.killer_moves[ply as usize].0 != m {
+            self.killer_moves[ply as usize].1 = self.killer_moves[ply as usize].0;
+            self.killer_moves[ply as usize].0 = m;
+        }
     }
 }
