@@ -62,7 +62,7 @@ impl Move {
 
         let from = Position::parse_square(string.get(0..2).ok_or(())?)?;
         let to = Position::parse_square(string.get(2..4).ok_or(())?)?;
-        let promote_to = string.chars().nth(5).map(|c| match c {
+        let promote_to = string.chars().nth(4).map(|c| match c {
             'q' => Ok(Piece::Queen),
             'r' => Ok(Piece::Rook),
             'b' => Ok(Piece::Bishop),

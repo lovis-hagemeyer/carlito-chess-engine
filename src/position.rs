@@ -1,6 +1,7 @@
 use crate::bitboard::*;
 use crate::chess_move::*;
 
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Piece {
     Pawn,
@@ -46,6 +47,8 @@ struct StackFrame {
     captured_piece: Piece,
 
     pinned: Bitboard,
+
+    hash: u64
 }
 
 #[derive(Debug, Clone)]
@@ -90,13 +93,20 @@ impl Position {
     }
 
     pub fn king_square(&self, player: Color) -> u8 {
-        self.pieces(King, player).squares().next().expect("each player should always have a king on the board.")
+        self.pieces(King, player).into_iter().next().expect("each player should always have a king on the board.")
     }
 
     pub fn current_player(&self) -> Color {
         self.current_player
     }
 
+    pub fn piece_on(&self, square: u8) -> Piece{
+        self.squares[square as usize]
+    }
+
+    pub fn hash(&self) -> u64 {
+        self.stack.last().unwrap().hash
+    }
 
     /*
      * fen parsing
@@ -114,7 +124,8 @@ impl Position {
                 en_passant_file: None,
                 half_move_clock: 0,
                 captured_piece: NoPiece,
-                pinned: Bitboard::new()
+                pinned: Bitboard::new(),
+                hash: 0
             }]
         };
 
@@ -134,6 +145,7 @@ impl Position {
         }
 
         p.stack.last_mut().unwrap().pinned = p.pinned_pieces();
+        p.stack.last_mut().unwrap().hash = p.calculate_hash();
 
         Ok(p)
     }
@@ -352,7 +364,8 @@ impl Position {
             en_passant_file: None,
             half_move_clock: self.stack.last().unwrap().half_move_clock + 1,
             captured_piece,
-            pinned: Bitboard::new()
+            pinned: Bitboard::new(),
+            hash: 0
         });
 
         if captured_piece != NoPiece {
@@ -440,6 +453,7 @@ impl Position {
         self.current_player = !self.current_player;
 
         self.stack.last_mut().unwrap().pinned = self.pinned_pieces();
+        self.stack.last_mut().unwrap().hash = self.calculate_hash();
     }
     
     pub fn unmake_move(&mut self, m: Move) {
@@ -498,6 +512,7 @@ impl Position {
     /*
      * move generation
      */
+
     pub fn legal_moves(&mut self) -> Vec<Move> {
         self.pseudo_legal_moves().into_iter().filter(|m| self.is_legal(*m)).collect()
     }
@@ -510,9 +525,9 @@ impl Position {
         let in_check = target_squares != !Bitboard::new();
 
         //knight moves
-        for piece in self.pieces(Knight, self.current_player).squares() {
+        for piece in self.pieces(Knight, self.current_player) {
             let knight_moves = Bitboard::knight_attacks(piece) & !self.pieces_py_player(self.current_player) & target_squares;
-            for target in knight_moves.squares() {
+            for target in knight_moves {
                 moves.push(Move::new(piece, target));
             }
         }
@@ -534,24 +549,24 @@ impl Position {
         }
 
         //bishop moves and diagonal queen moves
-        for piece in (self.pieces(Bishop, self.current_player) | self.pieces(Queen, self.current_player)).squares() {
+        for piece in self.pieces(Bishop, self.current_player) | self.pieces(Queen, self.current_player) {
             let bishop_moves = Bitboard::bishop_attacks(piece, self.occupied()) & !self.pieces_py_player(self.current_player) & target_squares;
-            for target in bishop_moves.squares() {
+            for target in bishop_moves {
                 moves.push(Move::new(piece, target));
             }
         }
 
         //rook moves and vertical and horizontal queen moves
-        for piece in (self.pieces(Rook, self.current_player) | self.pieces(Queen, self.current_player)).squares() {
+        for piece in self.pieces(Rook, self.current_player) | self.pieces(Queen, self.current_player) {
             let rook_moves = Bitboard::rook_attacks(piece, self.occupied()) & !self.pieces_py_player(self.current_player) & target_squares;
-            for target in rook_moves.squares() {
+            for target in rook_moves {
                 moves.push(Move::new(piece, target));
             }
         }
 
         //king moves
         let king_targets = Bitboard::king_attacks(self.king_square(self.current_player)) & !self.pieces_py_player(self.current_player);
-        for to in king_targets.squares() {
+        for to in king_targets {
             moves.push(Move::new(self.king_square(self.current_player), to));
         }
 
@@ -590,7 +605,7 @@ impl Position {
 
             let from_squares = self.pieces(Pawn, self.current_player) & (en_passant_square.shift(Direction::Left) | en_passant_square.shift(Direction::Right));
         
-            for from in from_squares.squares() {
+            for from in from_squares {
                 moves.push(Move::new_en_passant(from, to_rank*8+file));
             }
         }
@@ -613,7 +628,7 @@ impl Position {
         let blockers = rook_attack_king_blockers | bishop_attack_king_blockers;
 
         let mut pinned = Bitboard::new();
-        for p in pinners.squares() {
+        for p in pinners {
             pinned |= blockers & Bitboard::in_between(king_square, p);
         }
 
@@ -666,7 +681,7 @@ impl Position {
         true
     }
 
-    fn is_attacked(&self, square: u8, player: Color) -> bool {
+    pub fn is_attacked(&self, square: u8, player: Color) -> bool {
         if !(Bitboard::knight_attacks(square) & self.pieces(Knight, !player)).is_empty(){
             return true;
         }
@@ -717,7 +732,7 @@ impl Position {
         let non_sliding_attacks = pawn_attacks | knight_attacks;
         
         //there can only be at most one non sliding piece attacking the king
-        if let Some(square) = non_sliding_attacks.squares().next() {
+        if let Some(square) = non_sliding_attacks.into_iter().next() {
             blocking_squares &= Bitboard::from_square(square);
         }
 
@@ -726,7 +741,7 @@ impl Position {
         let diag_attacks = Bitboard::bishop_attacks(king_square, self.occupied());
         let diag_attackers = diag_attacks & enemy_bishops_and_queens;
         
-        for attacker in diag_attackers.squares() {
+        for attacker in diag_attackers {
             blocking_squares &= diag_attacks & Bitboard::in_between(king_square, attacker);
         }
 
@@ -735,7 +750,7 @@ impl Position {
         let rook_attacks = Bitboard::rook_attacks(king_square, self.occupied());
         let rook_attackers = rook_attacks & enemy_rooks_and_queens;
 
-        for attacker in rook_attackers.squares() {
+        for attacker in rook_attackers {
             blocking_squares &= rook_attacks & Bitboard::in_between(king_square, attacker);
         }
 
@@ -744,11 +759,11 @@ impl Position {
     }
 
     fn generate_pawn_moves(moves: &mut Vec<Move>, targets: Bitboard, offset: i8) {
-        for to in (targets & !(Bitboard::rank(0) | Bitboard::rank(7))).squares() {
+        for to in targets & !(Bitboard::rank(0) | Bitboard::rank(7)) {
             moves.push(Move::new((to as i8 - offset) as u8, to));
         }
 
-        for to in (targets & (Bitboard::rank(0) | Bitboard::rank(7))).squares() {
+        for to in targets & (Bitboard::rank(0) | Bitboard::rank(7)) {
             /* the order in which promotion moves are generated is important. If the engine thinks
                two promotions are equally good, it should choose the heavier piece.
             */
@@ -757,6 +772,85 @@ impl Position {
             }
         }
     }
+
+
+    /*
+     * zobrist hash
+     */
+
+    const fn random_number(n: u32) -> u64 {
+        let mut state = 0;
+        let mut i = 0;
+        while i < n+2 {
+            state = u64::overflowing_add(u64::overflowing_mul(2862933555777941757, state).0, 3037000493).0;
+            i+= 1;
+        }
+
+        state
+    }
+
+    const fn random_array<const N: usize>(offset: u32) -> [u64; N] {
+        let mut arr = [0; N];
+
+        let mut i = 0;
+        while i < N {
+            arr[i] = Self::random_number(offset + i as u32);
+            i += 1;
+        }
+
+        arr
+    }
+
+    const fn random_array_2d<const N: usize, const M: usize>(offset: u32) -> [[u64; M]; N] {
+        let mut arr = [[0; M]; N];
+
+        let mut i = 0; 
+        while i < N {
+            arr[i] = Self::random_array(offset + (i*M) as u32);
+            i += 1;
+        }
+
+        arr
+    }
+
+    const fn random_array_3d<const N: usize, const M: usize, const L: usize>(offset: u32) -> [[[u64; L]; M]; N] {
+        let mut arr = [[[0; L]; M]; N];
+
+        let mut i = 0; 
+        while i < N {
+            arr[i] = Self::random_array_2d(offset + (i*M*L) as u32);
+            i += 1;
+        }
+
+        arr
+    }
+
+    const zobrist_pieces: [[[u64; 64]; 6]; 2] = Self::random_array_3d(0);
+    const zobrist_castling_right: [u64; 16] = Self::random_array(64*6*2);
+    const zobrist_en_passant: [u64; 8] = Self::random_array(64*6*2+16);
+    const zobrist_current_player: [u64; 2] = Self::random_array(64*6*2+16+8);
+
+    fn calculate_hash(&self) -> u64 {
+
+        let mut hash = 0;
+        
+        for p in [Black, White] {
+            for s in self.pieces_py_player(p) {
+                hash ^= Self::zobrist_pieces[p as usize][self.piece_on(s) as usize][s as usize];
+            }
+        }
+
+        hash ^= Self::zobrist_castling_right[self.stack.last().unwrap().castling_rights as usize];
+        
+        if let Some(e) = self.stack.last().unwrap().en_passant_file {
+            hash ^= Self::zobrist_en_passant[e as usize];
+        }
+
+        hash ^= Self::zobrist_current_player[self.current_player() as usize];
+
+        hash
+    }
+
 
     /*
      * perft function

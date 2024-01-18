@@ -7,6 +7,8 @@ use crate::engine::*;
 const NAME: &str = "Carlito Chess Engine";
 const AUTHOR: &str = "Lovis Hagemeyer";
 
+const DEFAULT_TABLE_SIZE: usize = 64;
+
 
 pub struct UciHandler {
     position: Position,
@@ -17,7 +19,7 @@ impl UciHandler {
     pub fn new() -> UciHandler {
         UciHandler {
             position: Position::new(),
-            engine: Engine::new()
+            engine: Engine::new(DEFAULT_TABLE_SIZE)
         }
     }
 
@@ -83,7 +85,7 @@ impl UciHandler {
                 }
 
                 if let Some(n) = Self::parse_int_arg(tokens, "value") {
-                    self.engine.set_table_size(n); 
+                    self.engine.set_table_size(n as usize); 
                 }
             },
             Some("ponder") => { },

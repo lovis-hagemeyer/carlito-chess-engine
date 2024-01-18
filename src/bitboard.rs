@@ -53,12 +53,6 @@ impl Bitboard {
         }
     }
 
-    pub fn squares(&self) -> BitboardIterator {
-        BitboardIterator {
-            b: self.b
-        }
-    }
-
     pub const fn contains(&self, square: u8) -> bool {
         ((1 << square) & self.b) != 0
     }
@@ -147,6 +141,17 @@ impl Bitboard {
         
         Bitboard {
             b: KINDERGARTEN_FILE_ATTACKS_TABLE[(square/8) as usize][index as usize].b << (square%8) 
+        }
+    }
+}
+
+impl IntoIterator for Bitboard {
+    type Item = u8;
+    type IntoIter = BitboardIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        BitboardIterator {
+            b: self.b
         }
     }
 }
