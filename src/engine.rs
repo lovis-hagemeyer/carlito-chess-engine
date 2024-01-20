@@ -234,7 +234,7 @@ impl Engine {
 
         let moves = position.legal_moves();
         
-        if moves.len() == 0 {
+        if moves.is_empty() {
             if position.is_attacked(position.king_square(position.current_player()), position.current_player()) {
                 return Some(Score::from_mate_distance(-(((ply+1)/2) as i16)));
             } else {

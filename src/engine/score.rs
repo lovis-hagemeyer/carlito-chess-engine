@@ -40,7 +40,7 @@ impl Score {
 
     pub fn centi_pawns(&self) -> Option<i16> {
         if self <= &Score::WINNING && self >= &Score::LOOSING {
-            return Some(self.s)
+            Some(self.s)
         } else {
             None
         }

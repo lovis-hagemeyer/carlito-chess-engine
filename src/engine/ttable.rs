@@ -60,7 +60,7 @@ impl TTable {
     pub fn insert(&mut self, hash: u64, entry_type: EntryType, score: Score, best_move: Move, depth: u16) {
         let index = hash as usize % self.table.len();
         
-        self.table[index as usize] = TTableEntry {
+        self.table[index] = TTableEntry {
             hash,
             entry_type,
             score,

@@ -805,7 +805,7 @@ impl Position {
             }
         }
 
-        return false;
+        false
     }
 
      
@@ -882,10 +882,10 @@ impl Position {
         arr
     }
 
-    const zobrist_pieces: [[[u64; 64]; 6]; 2] = Self::random_array_3d(0);
-    const zobrist_castling_right: [u64; 16] = Self::random_array(64*6*2);
-    const zobrist_en_passant: [u64; 8] = Self::random_array(64*6*2+16);
-    const zobrist_current_player: [u64; 2] = Self::random_array(64*6*2+16+8);
+    const ZOBRIST_PIECES: [[[u64; 64]; 6]; 2] = Self::random_array_3d(0);
+    const ZOBRIST_CASTLING_RIGHT: [u64; 16] = Self::random_array(64*6*2);
+    const ZOBRIST_EN_PASSANT: [u64; 8] = Self::random_array(64*6*2+16);
+    const ZOBRIST_CURRENT_PLAYER: [u64; 2] = Self::random_array(64*6*2+16+8);
 
     fn calculate_hash(&self) -> u64 {
 
@@ -893,17 +893,17 @@ impl Position {
         
         for p in [Black, White] {
             for s in self.pieces_py_player(p) {
-                hash ^= Self::zobrist_pieces[p as usize][self.piece_on(s) as usize][s as usize];
+                hash ^= Self::ZOBRIST_PIECES[p as usize][self.piece_on(s) as usize][s as usize];
             }
         }
 
-        hash ^= Self::zobrist_castling_right[self.stack.last().unwrap().castling_rights as usize];
+        hash ^= Self::ZOBRIST_CASTLING_RIGHT[self.stack.last().unwrap().castling_rights as usize];
         
         if let Some(e) = self.stack.last().unwrap().en_passant_file {
-            hash ^= Self::zobrist_en_passant[e as usize];
+            hash ^= Self::ZOBRIST_EN_PASSANT[e as usize];
         }
 
-        hash ^= Self::zobrist_current_player[self.current_player() as usize];
+        hash ^= Self::ZOBRIST_CURRENT_PLAYER[self.current_player() as usize];
 
         hash
     }
