@@ -68,6 +68,9 @@ pub struct Position {
 
 impl Position {
 
+    pub const LIGHT_SQUARES: Bitboard = Bitboard::from_u64(0xaa55aa55aa55aa55); 
+    pub const DARK_SQUARES: Bitboard = Bitboard::from_u64(0x55aa55aa55aa55aa);
+
     pub fn new() -> Position {
         Self::from_fen_string(START_FEN).expect("the fen of the starting position should parse without an error")
     }
@@ -106,6 +109,10 @@ impl Position {
 
     pub fn hash(&self) -> u64 {
         self.stack.last().unwrap().hash
+    }
+
+    pub fn half_move_clock(&self) -> u32 {
+        self.stack.last().unwrap().half_move_clock
     }
 
     /*
@@ -771,6 +778,56 @@ impl Position {
                 moves.push(Move::new_promotion((to as i8 - offset) as u8, to, p));
             }
         }
+    }
+    
+    /*
+     * draw detection
+     */
+
+    pub fn has_repetition(&self, ply: u16) -> bool {
+        
+        let mut repetitions = 0;
+
+        for (i, hash) in self.stack.iter().enumerate().map(|(i, f)| (i, f.hash)).step_by(2).skip(1) {
+            if i > self.stack.last().unwrap().half_move_clock as usize{
+                break;
+            }
+
+            if hash == self.stack.last().unwrap().hash {
+                if i <= ply as usize{
+                    return true;
+                }
+
+                repetitions += 1;
+                if repetitions >= 2 {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+     
+    pub fn insufficient_material(&self) -> bool {
+        let major_pieces = (self.pieces_by_piece_type(Rook) | self.pieces_by_piece_type(Queen)).count_squares();
+        let bishops = self.pieces_by_piece_type(Bishop).count_squares();
+        let knights = self.pieces_by_piece_type(Knight).count_squares();
+        let pawns = self.pieces_by_piece_type(Pawn).count_squares();
+
+        if major_pieces == 0 && pawns == 0 {
+            //king vs king + knight and king vs king + bishop
+            if bishops + knights <= 1 {
+                return true;
+            }
+
+            if bishops == 2 && self.pieces(Bishop, White).count_squares() == 1 //each player has one bishop
+                    && (Self::LIGHT_SQUARES & self.pieces_by_piece_type(Bishop)).count_squares() != 1 { //the bishops are on same colored squares
+                return true;
+            }
+        }
+
+        false
     }
 
 

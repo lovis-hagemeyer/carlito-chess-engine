@@ -1,4 +1,5 @@
 clean code:
+- no (public) uci-handler object
 - new type for square?
 - Option<Piece> intead of Piece::NoPiece ?
 - consistent Player/Color nomenclature
@@ -6,3 +7,8 @@ clean code:
 testing:
 - perft testing with hashmap
 - (write test functions with macros for prettier output and multithreading when using cargo test)
+
+ai:
+- uci option for draw score
+- better ttable replacement scheme
+- incremental zobrists hash

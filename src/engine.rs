@@ -42,7 +42,6 @@ pub struct ThreadData {
 struct SearchData {
     pv: Vec<Move>,
     evaluator: Evaluator,
-    search_aborted: bool,
     nodes: u64,
     move_sorter: MoveSorter,
     ttable: TTable
@@ -51,6 +50,8 @@ struct SearchData {
 struct MoveSorter {
     killer_moves: Vec<(Move, Move)>,
 }
+
+const DRAW_SCORE: Score = Score { s: 0 };
 
 #[derive(Debug, Clone)]
 pub struct EngineOptions {
@@ -146,7 +147,6 @@ impl Engine {
         let mut data = SearchData {
             pv: Vec::new(),
             evaluator: Evaluator::new(),
-            search_aborted: false,
             nodes: 0,
             move_sorter: MoveSorter::new(),
             ttable
@@ -157,11 +157,10 @@ impl Engine {
         loop {
             data.pv = Vec::new();
 
-            let score = Engine::search(&mut position, depth, 0, Score::NEGATIVE_INFTY, Score::POSITIVE_INFTY, true, &mut data, &thread_data);
-
-            if data.search_aborted {
-                break;
-            }
+            let score = match Engine::search(&mut position, depth, 0, Score::NEGATIVE_INFTY, Score::POSITIVE_INFTY, true, &mut data, &thread_data) {
+                None => break,
+                Some(s) => s
+            };
 
             pv = data.pv;
 
@@ -220,34 +219,36 @@ impl Engine {
         data.ttable
     }
 
-    fn search(position: &mut Position, depth: u16, ply: u16, mut alpha: Score, beta: Score, pv_node: bool, data: &mut SearchData, thread_data: &ThreadData) -> Score {
+    fn search(position: &mut Position, depth: u16, ply: u16, mut alpha: Score, beta: Score, pv_node: bool, data: &mut SearchData, thread_data: &ThreadData) -> Option<Score> {
         
         if thread_data.stop.load(atomic::Ordering::Acquire) {
-            data.search_aborted = true;
-            return Score::from_centi_pawns(0);
+            return None;
         }
 
         data.nodes += 1;
 
         //TODO nodes option should be u64
         if (thread_data.options.nodes.unwrap_or(u32::MAX) as u64) < data.nodes {
-            data.search_aborted = true;
-            return Score::from_centi_pawns(0);
+            return None
         }
 
         let moves = position.legal_moves();
         
         if moves.len() == 0 {
             if position.is_attacked(position.king_square(position.current_player()), position.current_player()) {
-                return Score::from_mate_distance(-(((ply+1)/2) as i16));
+                return Some(Score::from_mate_distance(-(((ply+1)/2) as i16)));
             } else {
-                return Score::from_centi_pawns(0);
+                return Some(DRAW_SCORE);
             }
         }
 
-        if depth == 0 {
-            return data.evaluator.evaluate(position);
+        if position.insufficient_material() || position.has_repetition(ply) || position.half_move_clock() >= 100 {
+            return Some(DRAW_SCORE);
         }
+
+        if depth == 0 {
+            return Some(data.evaluator.evaluate(position));
+        }        
 
         let ttable_move;
 
@@ -259,16 +260,16 @@ impl Engine {
                         if ply == 0 {
                             data.pv.push(table_entry.best_move);
                         }
-                        return table_entry.score
+                        return Some(table_entry.score)
                     },
                     ttable::EntryType::Upper => {
                         if alpha >= table_entry.score {
-                            return table_entry.score;
+                            return Some(table_entry.score);
                         }
                     },
                     ttable::EntryType::Lower => {
                         if table_entry.score >= beta {
-                            return table_entry.score;
+                            return Some(table_entry.score);
                         }
                     }
                 }
@@ -288,12 +289,12 @@ impl Engine {
             
 
             if pv_node && i != 0 {
-                move_score = -Engine::search(position, depth - 1, ply + 1, - (Score { s: (alpha.s + 1) }), -alpha, false, data, thread_data);
+                move_score = -Engine::search(position, depth - 1, ply + 1, - (Score { s: (alpha.s + 1) }), -alpha, false, data, thread_data)?;
                 if move_score > alpha {
-                    move_score = -Engine::search(position, depth - 1, ply + 1, -beta, -alpha, true,  data, thread_data);
+                    move_score = -Engine::search(position, depth - 1, ply + 1, -beta, -alpha, true,  data, thread_data)?;
                 }
             } else {
-                move_score = -Engine::search(position, depth - 1, ply + 1, -beta, -alpha, pv_node, data, thread_data);
+                move_score = -Engine::search(position, depth - 1, ply + 1, -beta, -alpha, pv_node, data, thread_data)?;
             }
 
 
@@ -309,7 +310,7 @@ impl Engine {
 
                     data.ttable.insert(position.hash(), EntryType::Lower, move_score, best_move, depth);
                     
-                    return beta;
+                    return Some(alpha);
                 }
             }
         }
@@ -324,8 +325,18 @@ impl Engine {
             data.pv.push(best_move);
         }
 
-        alpha
+        Some(alpha)
     }
+
+    //TODO:
+    // return draw bound if one player has insufficient material.
+    // 0,0 if both player have insufficient material,
+    // 0,0 if repetition (try 0,+Inf, because a player actively needs to claim draw)
+    // 0,0 if 50-move-rule (-||-)
+    /*fn positional_score_bounds(position: &mut Position) -> (Score, Score) {
+        if position.has_repetition
+        (Score::NEGATIVE_INFTY, Score::POSITIVE_INFTY)
+    }*/
 }
 
 

@@ -20,7 +20,7 @@ impl Timer {
         if thread_data.options.infinite || thread_data.ponder.load(atomic::Ordering::Acquire) {
             None 
         } else {
-            let (min_ms, max_ms) = Self::calculate_min_max_time(&thread_data);
+            let (min_ms, max_ms) = Self::calculate_min_max_time(&thread_data)?;
 
             *(thread_data.min_time.lock().unwrap()) = Some(Duration::from_millis(min_ms as u64));
             *(thread_data.max_time.lock().unwrap()) = Some(Duration::from_millis(max_ms as u64));
@@ -39,24 +39,19 @@ impl Timer {
                 timer_thread: Some(t),
                 abort: sender
             })
-        } 
+        }
     }
 
-    fn calculate_min_max_time(thread_data: &ThreadData) -> (u32, u32) {
+    fn calculate_min_max_time(thread_data: &ThreadData) -> Option<(u32, u32)> {
         if let Some(move_time) = thread_data.options.move_time {
-            (move_time, move_time)
+            Some((move_time, move_time))
         } else {
             let moves_to_go = thread_data.options.moves_to_go.unwrap_or(50);
             
-            let clock_time_option = match thread_data.position.current_player() {
+            let clock_time = match thread_data.position.current_player() {
                 Color::White => thread_data.options.wtime,
                 Color::Black => thread_data.options.btime,
-            };
-
-            let clock_time = match clock_time_option {
-                Some(n) => n,
-                None => { return (2000, 2000); } //if no clocktime given, think for 2 seconds
-            };
+            }?; //return None if no clock time given.
 
             let increment = match thread_data.position.current_player() {
                 Color::White => thread_data.options.winc,
@@ -76,7 +71,7 @@ impl Timer {
                 max_time
             };
 
-            (min_time.min(max_time), max_time)
+            Some((min_time.min(max_time), max_time))
         }
     }
 }
