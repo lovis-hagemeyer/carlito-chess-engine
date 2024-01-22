@@ -53,3 +53,10 @@ impl core::ops::Neg for Score {
         Score { s: -self.s }
     }
 }
+
+impl core::ops::Add for Score {
+    type Output = Score;
+    fn add(self, rhs: Self) -> Self::Output {
+        Score { s: self.s + rhs.s }
+    }
+}

@@ -688,6 +688,10 @@ impl Position {
         true
     }
 
+    pub fn is_capture(&self, m: Move) -> bool {
+        m.is_en_passant() || self.piece_on(m.to()) != NoPiece
+    }
+
     pub fn is_attacked(&self, square: u8, player: Color) -> bool {
         if !(Bitboard::knight_attacks(square) & self.pieces(Knight, !player)).is_empty(){
             return true;

@@ -8,7 +8,7 @@ pub struct Evaluator {
 }
 
 pub struct EvalParams {
-    material: [i32; 5],
+    pub material: [i32; 5],
     piece_square: [[P; 64]; 6],
 
 }
@@ -133,13 +133,17 @@ impl Evaluator {
         
         let game_phase = self.game_phase(pos);
 
-        score += (game_phase as i32 * pos_eval.0 - (24-game_phase) as i32 * pos_eval.1) / 24;
+        score += ((game_phase as i32 * pos_eval.0) - (24-game_phase.clamp(0, 24)) as i32 * pos_eval.1) / 24;
 
         if pos.current_player() == Color::Black {
             score = -score;
         }
         
         Score::from_centi_pawns(score)
+    }
+
+    pub fn params(&self) -> &EvalParams {
+        &self.params
     }
 
     fn material(&mut self, pos: &mut Position, player: Color) -> i32 {

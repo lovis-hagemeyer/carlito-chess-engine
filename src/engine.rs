@@ -14,7 +14,7 @@ use timer::Timer;
 use score::Score;
 use ttable::{TTable, EntryType};
 
-use crate::chess_move::*;
+use crate::{chess_move::*, position};
 use crate::position::*;
 
 use self::eval::Evaluator;
@@ -136,7 +136,7 @@ impl Engine {
         }
     }
 
-    fn analyze(thread_data: Arc<ThreadData>, ttable: TTable) -> TTable {
+    fn analyze(thread_data: Arc<ThreadData>, ttable: TTable) -> TTable {       
 
         //TODO check for mate in start position
 
@@ -232,6 +232,10 @@ impl Engine {
             return None
         }
 
+        if depth == 0 {
+            return Self::qsearch(position, ply, alpha, beta, pv_node, data, thread_data);
+        }
+
         let moves = position.legal_moves();
         
         if moves.is_empty() {
@@ -244,11 +248,7 @@ impl Engine {
 
         if position.insufficient_material() || position.has_repetition(ply) || position.half_move_clock() >= 100 {
             return Some(DRAW_SCORE);
-        }
-
-        if depth == 0 {
-            return Some(data.evaluator.evaluate(position));
-        }        
+        }  
 
         let ttable_move;
 
@@ -282,7 +282,7 @@ impl Engine {
 
         let mut best_move = moves[0];
 
-        for (i, m) in data.move_sorter.sort(moves, ply, ttable_move).into_iter().enumerate() {
+        for (i, m) in data.move_sorter.sort(position, moves, ply, ttable_move).into_iter().enumerate() {
             position.make_move(m);
 
             let mut move_score;
@@ -328,6 +328,72 @@ impl Engine {
         Some(alpha)
     }
 
+    fn qsearch(position: &mut Position, ply: u16, mut alpha: Score, beta: Score, pv_node: bool, data: &mut SearchData, thread_data: &ThreadData) -> Option<Score> {
+        if thread_data.stop.load(atomic::Ordering::Acquire) {
+            return None;
+        }
+
+        data.nodes += 1;
+
+        //TODO nodes option should be u64
+        if (thread_data.options.nodes.unwrap_or(u32::MAX) as u64) < data.nodes {
+            return None
+        }
+
+        let moves = position.legal_moves();
+        
+        if moves.is_empty() {
+            if position.is_attacked(position.king_square(position.current_player()), position.current_player()) {
+                return Some(Score::from_mate_distance(-(((ply+1)/2) as i16)));
+            } else {
+                return Some(DRAW_SCORE);
+            }
+        }
+
+        if position.insufficient_material() || position.has_repetition(ply) || position.half_move_clock() >= 100 {
+            return Some(DRAW_SCORE);
+        }
+
+        let standing_pat = data.evaluator.evaluate(position);
+
+        if standing_pat >= beta {
+            return Some(standing_pat);
+        }
+        if standing_pat > alpha {
+            alpha = standing_pat;
+        }
+
+        let moves = position.legal_moves();
+        for m in MoveSorter::sort_qsearch(position, moves).into_iter() {
+
+            if !position.is_capture(m) {
+                continue;
+            }
+
+            let victim = position.piece_on(m.to());
+            let victim_value = data.evaluator.params().material[ if victim == Piece::NoPiece { Piece::Pawn } else { victim } as usize ];
+            if standing_pat + Score::from_centi_pawns(victim_value) + Score::from_centi_pawns(200) <= alpha {
+                continue;
+            }
+
+            position.make_move(m);
+
+            let score = -Self::qsearch(position, ply + 1, -beta, -alpha, pv_node, data, thread_data)?;
+
+            position.unmake_move(m);
+
+            if score > alpha {
+                alpha = score;
+                if alpha >= beta {
+                    return Some(beta);
+                }
+            }
+
+        }
+
+        Some(alpha)
+    }
+
     //TODO:
     // return draw bound if one player has insufficient material.
     // 0,0 if both player have insufficient material,
@@ -363,7 +429,7 @@ impl MoveSorter {
         }
     }
 
-    pub fn sort(&mut self, mut moves: Vec<Move>, ply: u16, ttable_move: Option<Move>) -> Vec<Move> {
+    pub fn sort(&mut self, position: &mut Position, mut moves: Vec<Move>, ply: u16, ttable_move: Option<Move>) -> Vec<Move> {
         let mut sorted_moves = 0;
         
         if let Some(m) = ttable_move {
@@ -377,6 +443,13 @@ impl MoveSorter {
             self.killer_moves.push((Move::new(0,0), Move::new(0,0)));
         }
 
+        Self::sort_captures(position, &mut moves[sorted_moves..]);
+
+        moves
+    }
+
+    pub fn sort_qsearch(position: &mut Position, mut moves: Vec<Move>) -> Vec<Move> {
+        Self::sort_captures(position, &mut moves);
         moves
     }
 
@@ -384,6 +457,49 @@ impl MoveSorter {
         if self.killer_moves[ply as usize].0 != m {
             self.killer_moves[ply as usize].1 = self.killer_moves[ply as usize].0;
             self.killer_moves[ply as usize].0 = m;
+        }
+    }
+
+    fn lva_mvv_values(position: &mut Position, m: Move) -> u8 {
+        //println!("move: {}", m);
+        let values = [1,3,3,5,9,0,1]; //Piece::NoPiece as usize == 7  =>  en passant captures have a victim value of 1
+        
+        let victim_value = values[position.piece_on(m.to()) as usize];
+        let attacker_value = values[position.piece_on(m.from()) as usize];
+
+        //println!("{victim_value}, {attacker_value}");
+
+        return 16*victim_value - attacker_value;
+    }
+
+    fn sort_captures(position: &mut Position, moves: &mut [Move]) {
+        let mut move_scores = Vec::new();
+        
+        for i in 0..moves.len() {
+            if position.is_capture(moves[i]) {
+                move_scores.push(Self::lva_mvv_values(position, moves[i]));
+                moves.swap(i, move_scores.len()-1);
+            }
+        }
+
+        //println!("{:?}", move_scores);
+
+        for i in 1..move_scores.len() {
+            let score = move_scores[i];
+            let m = moves[i];
+            let mut index = 0;
+            for j in (0..i).rev() {
+                if move_scores[j] < score {
+                    move_scores[j+1] = move_scores[j];
+                    moves[j+1] = moves[j];
+                } else {
+                    index = j+1;
+                    break;
+                }
+            }
+            
+            moves[index] = m;
+            move_scores[index as usize] = score;
         }
     }
 }
