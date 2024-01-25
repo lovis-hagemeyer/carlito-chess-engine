@@ -115,6 +115,16 @@ impl Position {
         self.stack.last().unwrap().half_move_clock
     }
 
+    pub fn square_color(&self, square: u8) -> Option<Color> {
+        if self.color_bb[Color::White as usize].contains(square) {
+            Some(White)
+        } else if self.color_bb[Color::Black as usize].contains(square) {
+            Some(Black)
+        } else {
+            None
+        }
+    }
+
     /*
      * fen parsing
      */
@@ -344,22 +354,30 @@ impl Position {
         res
     }
 
-    pub fn square_color(&self, square: u8) -> Option<Color> {
-        if self.color_bb[Color::White as usize].contains(square) {
-            Some(White)
-        } else if self.color_bb[Color::Black as usize].contains(square) {
-            Some(Black)
-        } else {
-            None
-        }
-    }
-
     /*
      * making and unmaking moves
      */
 
     const CASTLE_ROOK_FROM: [u8; 4] = [63, 56, 7, 0];
     const CASTLE_ROOK_TO: [u8; 4] = [61 , 59, 5, 3];
+
+    fn remove_piece<const UPDATE_HASH: bool>(&mut self, piece: Piece, player: Color, square: u8) {
+        self.squares[square as usize] = NoPiece;
+        self.piece_bb[piece as usize] &= !Bitboard::from_square(square);
+        self.color_bb[player as usize] &= !Bitboard::from_square(square);
+        if UPDATE_HASH {
+            self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_PIECES[player as usize][piece as usize][square as usize];
+        }
+    }
+
+    fn add_piece<const UPDATE_HASH: bool>(&mut self, piece: Piece, player: Color, square: u8) {
+        self.squares[square as usize] = piece;
+        self.piece_bb[piece as usize] |= Bitboard::from_square(square);
+        self.color_bb[player as usize] |= Bitboard::from_square(square);
+        if UPDATE_HASH {
+            self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_PIECES[player as usize][piece as usize][square as usize];
+        }
+    }
 
     pub fn make_move(&mut self, m: Move) {
 
@@ -372,21 +390,21 @@ impl Position {
             half_move_clock: self.stack.last().unwrap().half_move_clock + 1,
             captured_piece,
             pinned: Bitboard::new(),
-            hash: 0
+            hash: self.stack.last().unwrap().hash
         });
 
         if captured_piece != NoPiece {
-            self.color_bb[!self.current_player as usize] &= !Bitboard::from_square(m.to());
-            self.piece_bb[captured_piece as usize] &= !Bitboard::from_square(m.to());
+            self.remove_piece::<true>(captured_piece, !self.current_player(), m.to());
             self.stack.last_mut().unwrap().half_move_clock = 0;
         }
 
-        self.color_bb[self.current_player as usize] &= !Bitboard::from_square(m.from());
-        self.color_bb[self.current_player as usize] |= Bitboard::from_square(m.to());
-        self.piece_bb[moved_piece as usize] &= !Bitboard::from_square(m.from());
-        self.piece_bb[moved_piece as usize] |= Bitboard::from_square(m.to());
-        self.squares[m.from() as usize] = NoPiece;
-        self.squares[m.to() as usize] = moved_piece;
+        self.remove_piece::<true>(moved_piece, self.current_player(), m.from());
+        
+        if let Some(promote_to) = m.promote_to() {
+            self.add_piece::<true>(promote_to, self.current_player(), m.to());
+        } else {
+            self.add_piece::<true>(moved_piece, self.current_player(), m.to());
+        }
 
         if m.is_en_passant() {
             let captured_pawn_square = if self.current_player == White {
@@ -395,31 +413,14 @@ impl Position {
                 m.to() - 8
             };
 
-            self.piece_bb[Pawn as usize] &= !Bitboard::from_square(captured_pawn_square);
-            self.color_bb[!self.current_player as usize] &= !Bitboard::from_square(captured_pawn_square);
-            self.squares[captured_pawn_square as usize] = NoPiece;
-
-            self.stack.last_mut().unwrap().half_move_clock = 0;
+            self.remove_piece::<true>(Pawn, !self.current_player(), captured_pawn_square);
             
-        } else if let Some(p) = m.promote_to() {
-            self.piece_bb[Pawn as usize] &= !Bitboard::from_square(m.to());
-            self.piece_bb[p as usize] |= Bitboard::from_square(m.to());
-            self.squares[m.to() as usize] = p;
-
-            //half move clock is set to zero below
-
         } else if let Some(c) = m.castling_type() {
             let rook_from = Self::CASTLE_ROOK_FROM[c as usize];
             let rook_to = Self::CASTLE_ROOK_TO[c as usize];
 
-            self.squares[rook_from as usize] = NoPiece;
-            self.squares[rook_to as usize] = Rook;
-
-            self.piece_bb[Rook as usize] &= !Bitboard::from_square(rook_from);
-            self.piece_bb[Rook as usize] |= Bitboard::from_square(rook_to);
-
-            self.color_bb[self.current_player as usize] &= !Bitboard::from_square(rook_from);
-            self.color_bb[self.current_player as usize] |= Bitboard::from_square(rook_to);
+            self.add_piece::<true>(Rook, self.current_player(), rook_to);
+            self.remove_piece::<true>(Rook, self.current_player(), rook_from);
 
             self.stack.last_mut().unwrap().half_move_clock = 0;
 
@@ -427,6 +428,9 @@ impl Position {
         }
 
         if moved_piece == Pawn {
+            self.stack.last_mut().unwrap().half_move_clock = 0;
+
+            //update en passant file
             if ((m.to() as i32) - (m.from() as i32)) % 16 == 0 { //two step pawn move
                 let en_passant_capture_squares = Bitboard::from_square(m.to()).shift(Direction::Left) | Bitboard::from_square(m.to()).shift(Direction::Right);
         
@@ -434,11 +438,19 @@ impl Position {
                     self.stack.last_mut().unwrap().en_passant_file = Some(m.to() % 8);
                 } 
             }
-
-            self.stack.last_mut().unwrap().half_move_clock = 0;
-
         } 
+
+        //update zobrist hash for en passant file
+        if let Some(file) = self.stack.iter().rev().skip(1).next().unwrap().en_passant_file { //if there was an en passant file in the previous position,
+            self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_EN_PASSANT[file as usize]; //remove it from the hash
+        }
+
+        if let Some(file) = self.stack.last().unwrap().en_passant_file { //if there is an en passant file in the current position,
+            self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_EN_PASSANT[file as usize]; //add it to the hash
+        }
+
         
+        //update castling rights
         if moved_piece == King {
             if self.current_player == White {
                 self.stack.last_mut().unwrap().castling_rights &= !(1 << CastlingType::WhiteCastleKingside as u8) & !(1 << CastlingType::WhiteCastleQueenside as u8);
@@ -453,14 +465,25 @@ impl Position {
             }
         }
 
+        //update zobrist hash for castling rights
+        let prev_castling_rights = self.stack.iter().rev().skip(1).next().unwrap().castling_rights;
+        let current_castling_rights = self.stack.last().unwrap().castling_rights;
+        self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_CASTLING_RIGHT[prev_castling_rights as usize];
+        self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_CASTLING_RIGHT[current_castling_rights as usize];
+
+
         if self.current_player == Black {
             self.full_move_clock += 1;
         }
 
         self.current_player = !self.current_player;
 
+        //update zobrist hash for current player
+        self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_CURRENT_PLAYER[White as usize];
+        self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_CURRENT_PLAYER[Black as usize];
+
+
         self.stack.last_mut().unwrap().pinned = self.pinned_pieces();
-        self.stack.last_mut().unwrap().hash = self.calculate_hash();
     }
     
     pub fn unmake_move(&mut self, m: Move) {
@@ -470,18 +493,15 @@ impl Position {
 
         self.current_player = !self.current_player;
 
-        self.piece_bb[moved_piece as usize] |= Bitboard::from_square(m.from());
-        self.piece_bb[moved_piece as usize] &= !Bitboard::from_square(m.to());
-
-        self.color_bb[self.current_player as usize] |= Bitboard::from_square(m.from());
-        self.color_bb[self.current_player as usize] &= !Bitboard::from_square(m.to());
-
-        self.squares[m.to() as usize] = captured_piece;
-        self.squares[m.from() as usize] = moved_piece;
+        self.remove_piece::<false>(moved_piece, self.current_player(), m.to());
+        if m.promote_to().is_some() {
+            self.add_piece::<false>(Pawn, self.current_player(), m.from());    
+        } else {
+            self.add_piece::<false>(moved_piece, self.current_player(), m.from());
+        }
 
         if captured_piece != NoPiece {
-            self.piece_bb[captured_piece as usize] |= Bitboard::from_square(m.to());
-            self.color_bb[!self.current_player as usize] |= Bitboard::from_square(m.to());
+            self.add_piece::<false>(captured_piece, !self.current_player(), m.to());
         }
 
         if m.is_en_passant() {
@@ -491,27 +511,14 @@ impl Position {
                 m.to() - 8
             };
 
-            self.piece_bb[Pawn as usize] |= Bitboard::from_square(captured_pawn_square);
-            self.color_bb[!self.current_player as usize] |= Bitboard::from_square(captured_pawn_square);
-            self.squares[captured_pawn_square as usize] = Pawn;
-            
-        } else if let Some(p) = m.promote_to() {
-            self.squares[m.from() as usize] = Pawn;
-            self.piece_bb[Pawn as usize] |= Bitboard::from_square(m.from());
-            self.piece_bb[p as usize] &= !Bitboard::from_square(m.from());
-            
+            self.add_piece::<false>(Pawn, !self.current_player(), captured_pawn_square);
+
         } else if let Some(c) = m.castling_type() {
             let rook_from = Self::CASTLE_ROOK_FROM[c as usize];
             let rook_to = Self::CASTLE_ROOK_TO[c as usize];
-
-            self.squares[rook_from as usize] = Rook;
-            self.squares[rook_to as usize] = NoPiece;
-
-            self.piece_bb[Rook as usize] |= Bitboard::from_square(rook_from);
-            self.piece_bb[Rook as usize] &= !Bitboard::from_square(rook_to);
-
-            self.color_bb[self.current_player as usize] |= Bitboard::from_square(rook_from);
-            self.color_bb[self.current_player as usize] &= !Bitboard::from_square(rook_to);
+            
+            self.remove_piece::<false>(Rook, self.current_player(), rook_to);
+            self.add_piece::<false>(Rook, self.current_player(), rook_from);
         } 
     }
 
@@ -936,42 +943,69 @@ impl Position {
 }
 
 
-/*
- * perft testing
- */
+#[cfg(test)]
+mod test {
+    use super::*;
 
-const PERFT_POSITIONS: [&str; 7] = ["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-                                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-                                    "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
-                                    "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
-                                    "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1",
-                                    "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
-                                    "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"];
+    const PERFT_POSITIONS: [&str; 7] = ["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                                        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+                                        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+                                        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+                                        "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1",
+                                        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+                                        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"];
 
 
-const PERFT_RESULTS: &[&[u64]] = &[&[20, 400, 8_902, 197_281, 4_865_609, 119_060_324, 3_195_901_860],
-                                   &[48, 2_039, 97_862, 4_085_603, 193_690_690, 8_031_647_685],
-                                   &[14, 191, 2_812, 43_238, 674_624, 11_030_083, 178_633_661, 3_009_794_393],
-                                   &[6, 264, 9_467, 422_333, 15_833_292, 706_045_033],
-                                   &[6, 264, 9_467, 422_333, 15_833_292, 706_045_033],
-                                   &[44, 1_486, 62_379, 2_103_487, 89_941_194],
-                                   &[46, 2_079, 89_890, 3_894_594, 164_075_551, 6_923_051_137]];
+    const PERFT_RESULTS: &[&[u64]] = &[&[20, 400, 8_902, 197_281, 4_865_609, 119_060_324, 3_195_901_860],
+                                    &[48, 2_039, 97_862, 4_085_603, 193_690_690, 8_031_647_685],
+                                    &[14, 191, 2_812, 43_238, 674_624, 11_030_083, 178_633_661, 3_009_794_393],
+                                    &[6, 264, 9_467, 422_333, 15_833_292, 706_045_033],
+                                    &[6, 264, 9_467, 422_333, 15_833_292, 706_045_033],
+                                    &[44, 1_486, 62_379, 2_103_487, 89_941_194],
+                                    &[46, 2_079, 89_890, 3_894_594, 164_075_551, 6_923_051_137]];
 
-#[test]
-fn perft_small() {
-    for (i, &fen) in PERFT_POSITIONS.iter().enumerate() {
-        for depth in 1..5 {
-            assert_eq!(PERFT_RESULTS[i][(depth-1) as usize], Position::from_fen_string(fen).unwrap().perft(depth));
+    #[test]
+    fn perft_small() {
+        for (i, &fen) in PERFT_POSITIONS.iter().enumerate() {
+            for depth in 1..5 {
+                assert_eq!(PERFT_RESULTS[i][(depth-1) as usize], Position::from_fen_string(fen).unwrap().perft(depth));
+            }
         }
     }
-}
 
-#[test]
-#[ignore]
-fn perft_full() {
-    for (i, &fen) in PERFT_POSITIONS.iter().enumerate() {
-        for depth in 1..PERFT_RESULTS[i].len()+1 {
-            assert_eq!(PERFT_RESULTS[i][depth-1], Position::from_fen_string(fen).unwrap().perft(depth as u32));
+    #[test]
+    #[ignore]
+    fn perft_full() {
+        for (i, &fen) in PERFT_POSITIONS.iter().enumerate() {
+            for depth in 1..PERFT_RESULTS[i].len()+1 {
+                assert_eq!(PERFT_RESULTS[i][depth-1], Position::from_fen_string(fen).unwrap().perft(depth as u32));
+            }
+        }
+    }
+
+    fn hash_test_rec(pos: &mut Position, depth: u32) {
+        assert_eq!(pos.hash(), pos.calculate_hash(), "\n{:#?}", pos);
+        if depth > 0 {
+            for m in pos.legal_moves() {
+                pos.make_move(m);
+                hash_test_rec(pos, depth-1);
+                pos.unmake_move(m);
+            }
+        }
+    }
+
+    #[test]
+    fn incremental_zobrist_hash_small() {
+        for &fen in PERFT_POSITIONS.iter() {
+            hash_test_rec(&mut Position::from_fen_string(fen).unwrap(), 3);
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn incremental_zobrist_hash_full() {
+        for &fen in PERFT_POSITIONS.iter() {
+            hash_test_rec(&mut Position::from_fen_string(fen).unwrap(), 4);
         }
     }
 }

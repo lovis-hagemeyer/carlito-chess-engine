@@ -1,5 +1,6 @@
 use std::io;
 
+use crate::position;
 use crate::position::*;
 use crate::chess_move::*;
 use crate::engine::*;
@@ -130,7 +131,13 @@ impl UciHandler {
                 "nodes" => { opt.nodes = Self::parse_int_arg(tokens, "nodes"); search_moves_flag = false; },
                 "mate" => { opt.mate_in = Self::parse_int_arg(tokens, "mate"); search_moves_flag = false; },
                 "movetime" => { opt.move_time = Self::parse_int_arg(tokens, "movetime"); search_moves_flag = false; },
-                "perft" => { } //TODO
+                "perft" => { 
+                    let depth = Self::parse_int_arg(tokens, "perft");
+                    if let Some(depth) = depth {
+                        Self::split_perft(&mut self.position, depth);
+                    }
+                    return;
+                }
 
                 arg => {
                     if search_moves_flag { 
@@ -221,23 +228,23 @@ impl UciHandler {
         }
     }
 
-    fn split_perft(pos: &mut Position, depth: u8, root_node: bool) -> u64 {
+    fn split_perft(pos: &mut Position, depth: u32) {
         if depth == 0 {
-            1
+            println!("1");
         } else {
             let mut result = 0;
             for m in pos.legal_moves().into_iter() {
     
                 pos.make_move(m);
-                let child_nodes = Self::split_perft(pos, depth-1,false);
-                if root_node {
-                    println!("{}: {child_nodes}", m);
-                }
+                
+                let child_nodes = pos.perft(depth-1);
+                println!("{}: {child_nodes}", m);
                 result += child_nodes;
+
                 pos.unmake_move(m);
             }
-    
-            result
+
+            println!("\n{result}");
         }
     }
 }

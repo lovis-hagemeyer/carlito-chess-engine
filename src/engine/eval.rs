@@ -1,7 +1,7 @@
-use std::ops::{Add, Sub, AddAssign};
+use std::ops::{Add, AddAssign, Neg, Sub};
 
 use crate::position::{Position, Color, Piece::*};
-use super::score::Score;
+use super::{score::Score, Piece};
 
 pub struct Evaluator {
     params: EvalParams
@@ -36,6 +36,14 @@ impl AddAssign for P {
     fn add_assign(&mut self, rhs: Self) {
         self.0 += rhs.0;
         self.1 += rhs.1;
+    }
+}
+
+impl Neg for P {
+    type Output = P;
+
+    fn neg(self) -> Self::Output {
+        P(0,0) - self
     }
 }
 
@@ -129,8 +137,14 @@ impl Evaluator {
     pub fn evaluate(&mut self, pos: &mut Position) -> Score {
         let mut score = self.material(pos, Color::White) - self.material(pos, Color::Black);
 
-        let pos_eval = self.piece_square(pos, Color::White) - self.piece_square(pos, Color::Black);
+        //let pos_eval = self.piece_square(pos, Color::White) - self.piece_square(pos, Color::Black);
         
+        let mut pos_eval = P(0,0);
+
+        for s in pos.occupied() {
+            pos_eval += self.eval_piece(pos, s);
+        }
+
         let game_phase = self.game_phase(pos);
 
         score += ((game_phase as i32 * pos_eval.0) - (24-game_phase.clamp(0, 24)) as i32 * pos_eval.1) / 24;
@@ -154,20 +168,26 @@ impl Evaluator {
         + pos.pieces(Queen, player).count_squares() as i32 * self.params.material[Queen as usize]
     }
 
-    fn piece_square(&mut self, pos: &mut Position, player: Color) -> P {
-        let mut score = P(0, 0);
-        for s in pos.pieces_py_player(player) {
+    fn eval_piece(&mut self, pos: &mut Position, square: u8) -> P {
+        let mut score = P(0,0);
+        let piece = pos.piece_on(square);
+        let player = pos.square_color(square).unwrap();
 
-            let score_index = if player == Color::White { //if evaluating for black, mirror square when looking up the square value
-                s
-            } else {
-                s ^ 56
-            };
+        //piece square
 
-            score += self.params.piece_square[pos.piece_on(s) as usize][score_index as usize];
+        let piece_square_value_index = if player == Color::White { //if evaluating for black, mirror square when looking up the square value
+            square
+        } else {
+            square ^ 56
+        };
+
+        score += self.params.piece_square[piece as usize][piece_square_value_index as usize];
+
+        if player == Color::White {
+            score
+        } else {
+            -score
         }
-
-        score
     }
 
     fn game_phase(&mut self, pos: &mut Position) -> u32{
