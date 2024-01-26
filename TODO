@@ -11,3 +11,4 @@ testing:
 ai:
 - uci option for draw score
 - better ttable replacement scheme
+- pv output

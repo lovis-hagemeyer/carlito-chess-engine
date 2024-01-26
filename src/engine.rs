@@ -171,9 +171,9 @@ impl Engine {
 
             print!("info depth {depth}");
             if let Some(s) = score.centi_pawns() {
-                print!(" cp {s}");
+                print!(" score cp {s}");
             } else {
-                print!(" mate {}", score.mate().unwrap());
+                print!(" score mate {}", score.mate().unwrap());
             }
 
             print!(" nodes {}", data.nodes);

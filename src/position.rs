@@ -799,13 +799,13 @@ impl Position {
         
         let mut repetitions = 0;
 
-        for (i, hash) in self.stack.iter().enumerate().map(|(i, f)| (i, f.hash)).step_by(2).skip(1) {
+        for (i, hash) in self.stack.iter().rev().map(|i| i.hash).enumerate().step_by(2).skip(1) {
             if i > self.stack.last().unwrap().half_move_clock as usize{
                 break;
             }
 
             if hash == self.stack.last().unwrap().hash {
-                if i <= ply as usize{
+                if i <= ply as usize {
                     return true;
                 }
 
@@ -1005,7 +1005,7 @@ mod test {
     #[ignore]
     fn incremental_zobrist_hash_full() {
         for &fen in PERFT_POSITIONS.iter() {
-            hash_test_rec(&mut Position::from_fen_string(fen).unwrap(), 4);
+            hash_test_rec(&mut Position::from_fen_string(fen).unwrap(), 5);
         }
     }
 }
