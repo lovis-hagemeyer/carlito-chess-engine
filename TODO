@@ -28,7 +28,7 @@ roadmap:
 test results:
 
 evaluation function tests: 
-- 'ps + m + s,i,p pawns + kar + k a + o + bp + (half)open rook file' vs sf 3:   
+- 'ps + m + s,i,p pawns + kar + k a + o + bp + (half)open rook file' vs sf 3:   [0.595] ELO: 67.0 +/- 15.4
 - 'ps + m + s,i,p pawns + kar + k a + outposts + bishop pair' vs stockfish 3:   [0.590] ELO: 63.5 +/- 12.3
 - 'ps + m + s,i,p pawns + kar + k a + outposts' vs stockfish 3:                 [0.585] ELO: 59.6 +/- 12.2
 - 'ps + m + s,i,p pawns + kar + king attackers+defenders' vs stockfish 3:       [0.566] ELO: 45.8 +/- 12.2 
