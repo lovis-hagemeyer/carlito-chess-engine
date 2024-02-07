@@ -151,6 +151,8 @@ impl Engine {
             move_sorter: MoveSorter::new(),
             ttable
         };
+        
+        //println!("{:?}", data.evaluator.evaluate(&mut position));
 
         let mut pv: Vec<Move> = Vec::new();
 

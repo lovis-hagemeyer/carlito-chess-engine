@@ -87,7 +87,7 @@ impl Position {
         self.piece_bb[piece as usize]
     }
 
-    pub fn pieces_py_player(&self, player: Color) -> Bitboard {
+    pub fn pieces_by_player(&self, player: Color) -> Bitboard {
         self.color_bb[player as usize]
     }
 
@@ -540,7 +540,7 @@ impl Position {
 
         //knight moves
         for piece in self.pieces(Knight, self.current_player) {
-            let knight_moves = Bitboard::knight_attacks(piece) & !self.pieces_py_player(self.current_player) & target_squares;
+            let knight_moves = Bitboard::knight_attacks(piece) & !self.pieces_by_player(self.current_player) & target_squares;
             for target in knight_moves {
                 moves.push(Move::new(piece, target));
             }
@@ -558,13 +558,13 @@ impl Position {
         Self::generate_pawn_moves(&mut moves, double_move_targets & target_squares, 2 * forward.offset());
 
         for direction in sideways {
-            let capture_targets = self.pieces(Pawn, self.current_player).shift(direction) & self.pieces_py_player(!self.current_player);
+            let capture_targets = self.pieces(Pawn, self.current_player).shift(direction) & self.pieces_by_player(!self.current_player);
             Self::generate_pawn_moves(&mut moves, capture_targets & target_squares, direction.offset());
         }
 
         //bishop moves and diagonal queen moves
         for piece in self.pieces(Bishop, self.current_player) | self.pieces(Queen, self.current_player) {
-            let bishop_moves = Bitboard::bishop_attacks(piece, self.occupied()) & !self.pieces_py_player(self.current_player) & target_squares;
+            let bishop_moves = Bitboard::bishop_attacks(piece, self.occupied()) & !self.pieces_by_player(self.current_player) & target_squares;
             for target in bishop_moves {
                 moves.push(Move::new(piece, target));
             }
@@ -572,14 +572,14 @@ impl Position {
 
         //rook moves and vertical and horizontal queen moves
         for piece in self.pieces(Rook, self.current_player) | self.pieces(Queen, self.current_player) {
-            let rook_moves = Bitboard::rook_attacks(piece, self.occupied()) & !self.pieces_py_player(self.current_player) & target_squares;
+            let rook_moves = Bitboard::rook_attacks(piece, self.occupied()) & !self.pieces_by_player(self.current_player) & target_squares;
             for target in rook_moves {
                 moves.push(Move::new(piece, target));
             }
         }
 
         //king moves
-        let king_targets = Bitboard::king_attacks(self.king_square(self.current_player)) & !self.pieces_py_player(self.current_player);
+        let king_targets = Bitboard::king_attacks(self.king_square(self.current_player)) & !self.pieces_by_player(self.current_player);
         for to in king_targets {
             moves.push(Move::new(self.king_square(self.current_player), to));
         }
@@ -629,8 +629,8 @@ impl Position {
 
     fn pinned_pieces(&self) -> Bitboard {
         let king_square = self.king_square(self.current_player);
-        let rook_attack_king_blockers = Bitboard::rook_attacks(king_square, self.occupied()) & self.pieces_py_player(self.current_player);
-        let bishop_attack_king_blockers = Bitboard::bishop_attacks(king_square, self.occupied()) & self.pieces_py_player(self.current_player);
+        let rook_attack_king_blockers = Bitboard::rook_attacks(king_square, self.occupied()) & self.pieces_by_player(self.current_player);
+        let bishop_attack_king_blockers = Bitboard::bishop_attacks(king_square, self.occupied()) & self.pieces_by_player(self.current_player);
 
         let enemy_rooks_and_queens = self.pieces(Rook, !self.current_player) | self.pieces(Queen, !self.current_player);
         let enemy_bishops_and_queens = self.pieces(Bishop, !self.current_player) | self.pieces(Queen, !self.current_player);
@@ -903,7 +903,7 @@ impl Position {
         let mut hash = 0;
         
         for p in [Black, White] {
-            for s in self.pieces_py_player(p) {
+            for s in self.pieces_by_player(p) {
                 hash ^= Self::ZOBRIST_PIECES[p as usize][self.piece_on(s) as usize][s as usize];
             }
         }

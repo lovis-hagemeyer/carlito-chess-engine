@@ -2,7 +2,7 @@ use std::fmt;
 
 #[derive(Copy, Clone, PartialEq)]
 pub struct Bitboard {
-    b: u64
+    pub b: u64
 }
 
 #[derive(Copy, Clone)]
@@ -118,22 +118,22 @@ impl Bitboard {
         KING_ATTACKS_TABLE[square as usize]
     }
 
-    fn diagonal_attacks(square: u8, occupied: Bitboard) -> Bitboard {
+    pub fn diagonal_attacks(square: u8, occupied: Bitboard) -> Bitboard {
         let index = u64::overflowing_mul((DIAGONALS_TABLE[square as usize][0] & occupied).b, Bitboard::file(1).b).0 >> 58;
         KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize] & DIAGONALS_TABLE[square as usize][0]
     }
 
-    fn antidiagonal_attacks(square: u8, occupied: Bitboard) -> Bitboard {
+    pub fn antidiagonal_attacks(square: u8, occupied: Bitboard) -> Bitboard {
         let index = u64::overflowing_mul((DIAGONALS_TABLE[square as usize][1] & occupied).b, Bitboard::file(1).b).0 >> 58;
         KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize] & DIAGONALS_TABLE[square as usize][1]
     }
 
-    fn rank_attacks(square: u8, occupied: Bitboard) -> Bitboard {
+    pub fn rank_attacks(square: u8, occupied: Bitboard) -> Bitboard {
         let index = ((Bitboard::rank(square / 8) & occupied).b >> ((square / 8)*8+1)) & 0x3f;
         KINDERGARTEN_ATTACKS_TABLE[(square % 8) as usize][index as usize] & Bitboard::rank(square / 8)
     }
 
-    fn file_attacks(square: u8, occupied: Bitboard) -> Bitboard {
+    pub fn file_attacks(square: u8, occupied: Bitboard) -> Bitboard {
         let c2h7_diagonal: u64 = 0x0080402010080400;
 
         let a_file_occ = Bitboard::file(0).b & (occupied.b >> (square%8));
@@ -257,6 +257,21 @@ impl std::ops::Not for Bitboard {
     }
 }
 
+impl std::ops::Shr<usize> for Bitboard {
+    type Output = Bitboard;
+
+    fn shr(self, rhs: usize) -> Self::Output {
+        Bitboard::from_u64(self.b >> rhs)
+    }
+}
+
+impl std::ops::Shl<usize> for Bitboard {
+    type Output = Bitboard;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        Bitboard::from_u64(self.b << rhs)
+    }
+}
 
 /*
  * look up tables 
