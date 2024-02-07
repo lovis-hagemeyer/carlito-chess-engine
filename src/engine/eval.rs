@@ -1,4 +1,4 @@
-use std::{convert::Infallible, i32::MAX, ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign}};
+use std::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
 
 use crate::{bitboard::{Bitboard, Direction::*}, position::{Color::{self, *}, Position}};
 use super::{score::Score, Piece::*};
@@ -430,7 +430,7 @@ impl Evaluator {
             if piece == Rook {
                 let file = Bitboard::file(square % 8);
 
-                if (pos.pieces_by_piece_type(Pawn) & file).is_empty() {
+                if (pos.pieces_by_type(Pawn) & file).is_empty() {
                     score += self.params.open_rook_file;
                 } else if (pos.pieces(Pawn, player) & file).is_empty() {
                     score += self.params.half_open_rook_file;
@@ -442,9 +442,9 @@ impl Evaluator {
     }
 
     fn game_phase(&mut self, pos: &mut Position) -> u32 {
-          pos.pieces_by_piece_type(Bishop).count_squares()
-        + pos.pieces_by_piece_type(Knight).count_squares()
-        + pos.pieces_by_piece_type(Rook).count_squares() * 2
-        + pos.pieces_by_piece_type(Queen).count_squares() * 4
+          pos.pieces_by_type(Bishop).count_squares()
+        + pos.pieces_by_type(Knight).count_squares()
+        + pos.pieces_by_type(Rook).count_squares() * 2
+        + pos.pieces_by_type(Queen).count_squares() * 4
     }
 }

@@ -66,6 +66,13 @@ pub struct Position {
     stack: Vec<StackFrame>,
 }
 
+impl Default for Position {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
 impl Position {
 
     pub const LIGHT_SQUARES: Bitboard = Bitboard::from_u64(0xaa55aa55aa55aa55); 
@@ -83,7 +90,7 @@ impl Position {
         self.color_bb[player as usize] & self.piece_bb[piece as usize]
     }
 
-    pub fn pieces_by_piece_type(&self, piece: Piece) -> Bitboard {
+    pub fn pieces_by_type(&self, piece: Piece) -> Bitboard {
         self.piece_bb[piece as usize]
     }
 
@@ -108,11 +115,11 @@ impl Position {
     }
 
     pub fn hash(&self) -> u64 {
-        self.stack.last().unwrap().hash
+        self.stack_frame().hash
     }
 
     pub fn half_move_clock(&self) -> u32 {
-        self.stack.last().unwrap().half_move_clock
+        self.stack_frame().half_move_clock
     }
 
     pub fn square_color(&self, square: u8) -> Option<Color> {
@@ -123,6 +130,15 @@ impl Position {
         } else {
             None
         }
+    }
+
+
+    fn stack_frame(&self) -> &StackFrame {
+        self.stack.last().expect("missing position stack frame. Did you undo a move in an initial position?")
+    }
+
+    fn mut_stack_frame(&mut self) -> &mut StackFrame {
+        self.stack.last_mut().expect("missing position stack frame. Did you undo a move in an initial position?")
     }
 
     /*
@@ -154,15 +170,15 @@ impl Position {
         p.parse_castling(sections.next().ok_or(())?)?;
         p.parse_en_passant(sections.next().ok_or(())?)?;
 
-        p.stack.last_mut().unwrap().half_move_clock = Self::parse_int(sections.next().ok_or(())?, u32::MAX/10)?;
+        p.mut_stack_frame().half_move_clock = Self::parse_int(sections.next().ok_or(())?, u32::MAX/10)?;
         p.full_move_clock = Self::parse_int(sections.next().ok_or(())?, u32::MAX/10)?;
 
         if sections.next().is_some() {
             return Err(());
         }
 
-        p.stack.last_mut().unwrap().pinned = p.pinned_pieces();
-        p.stack.last_mut().unwrap().hash = p.calculate_hash();
+        p.mut_stack_frame().pinned = p.pinned_pieces();
+        p.mut_stack_frame().hash = p.calculate_hash();
 
         Ok(p)
     }
@@ -239,7 +255,7 @@ impl Position {
 
     fn parse_castling(&mut self, s: &str) -> Result<(), ()> {
         if s == "-" {
-            self.stack.last_mut().unwrap().castling_rights = 0;
+            self.mut_stack_frame().castling_rights = 0;
             return Ok(());
         }
 
@@ -255,7 +271,7 @@ impl Position {
             }
 
             if iter.peek().unwrap() == c {
-                self.stack.last_mut().unwrap().castling_rights |= 1 << i;
+                self.mut_stack_frame().castling_rights |= 1 << i;
                 iter.next();
             }
         }
@@ -270,7 +286,7 @@ impl Position {
     fn parse_en_passant(&mut self, s: &str) -> Result<(), ()> {
 
         if s == "-" {
-            self.stack.last_mut().unwrap().en_passant_file = None;
+            self.mut_stack_frame().en_passant_file = None;
             return Ok(());
         }
 
@@ -289,7 +305,7 @@ impl Position {
 
         //check if there is an enemy pawn above/below the en passant target square
         if !((self.squares[(from_rank*8+file) as usize] == Pawn) && (self.square_color(from_rank*8+file) != Some(self.current_player))) {
-            self.stack.last_mut().unwrap().en_passant_file = None;
+            self.mut_stack_frame().en_passant_file = None;
             return Ok(());
         }
 
@@ -298,9 +314,9 @@ impl Position {
         let pawn_on_from_square = from_squares.any(|x| self.squares[x as usize] == Pawn && Some(self.current_player) == self.square_color(x));
 
         if pawn_on_from_square {
-            self.stack.last_mut().unwrap().en_passant_file = Some(file);
+            self.mut_stack_frame().en_passant_file = Some(file);
         } else {
-            self.stack.last_mut().unwrap().en_passant_file = None;
+            self.mut_stack_frame().en_passant_file = None;
         }
 
         Ok(())
@@ -366,7 +382,7 @@ impl Position {
         self.piece_bb[piece as usize] &= !Bitboard::from_square(square);
         self.color_bb[player as usize] &= !Bitboard::from_square(square);
         if UPDATE_HASH {
-            self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_PIECES[player as usize][piece as usize][square as usize];
+            self.mut_stack_frame().hash ^= Self::ZOBRIST_PIECES[player as usize][piece as usize][square as usize];
         }
     }
 
@@ -375,7 +391,7 @@ impl Position {
         self.piece_bb[piece as usize] |= Bitboard::from_square(square);
         self.color_bb[player as usize] |= Bitboard::from_square(square);
         if UPDATE_HASH {
-            self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_PIECES[player as usize][piece as usize][square as usize];
+            self.mut_stack_frame().hash ^= Self::ZOBRIST_PIECES[player as usize][piece as usize][square as usize];
         }
     }
 
@@ -385,17 +401,17 @@ impl Position {
         let captured_piece = self.squares[m.to() as usize];
 
         self.stack.push(StackFrame {
-            castling_rights: self.stack.last().unwrap().castling_rights,
+            castling_rights: self.stack_frame().castling_rights,
             en_passant_file: None,
-            half_move_clock: self.stack.last().unwrap().half_move_clock + 1,
+            half_move_clock: self.stack_frame().half_move_clock + 1,
             captured_piece,
             pinned: Bitboard::new(),
-            hash: self.stack.last().unwrap().hash
+            hash: self.stack_frame().hash
         });
 
         if captured_piece != NoPiece {
             self.remove_piece::<true>(captured_piece, !self.current_player(), m.to());
-            self.stack.last_mut().unwrap().half_move_clock = 0;
+            self.mut_stack_frame().half_move_clock = 0;
         }
 
         self.remove_piece::<true>(moved_piece, self.current_player(), m.from());
@@ -422,54 +438,54 @@ impl Position {
             self.add_piece::<true>(Rook, self.current_player(), rook_to);
             self.remove_piece::<true>(Rook, self.current_player(), rook_from);
 
-            self.stack.last_mut().unwrap().half_move_clock = 0;
+            self.mut_stack_frame().half_move_clock = 0;
 
             //castling rights are removed below
         }
 
         if moved_piece == Pawn {
-            self.stack.last_mut().unwrap().half_move_clock = 0;
+            self.mut_stack_frame().half_move_clock = 0;
 
             //update en passant file
             if ((m.to() as i32) - (m.from() as i32)) % 16 == 0 { //two step pawn move
                 let en_passant_capture_squares = Bitboard::from_square(m.to()).shift(Direction::Left) | Bitboard::from_square(m.to()).shift(Direction::Right);
         
                 if !(en_passant_capture_squares & self.pieces(Pawn, !self.current_player)).is_empty() { //opposite color pawns next to target square
-                    self.stack.last_mut().unwrap().en_passant_file = Some(m.to() % 8);
+                    self.mut_stack_frame().en_passant_file = Some(m.to() % 8);
                 } 
             }
         } 
 
         //update zobrist hash for en passant file
-        if let Some(file) = self.stack.iter().rev().skip(1).next().unwrap().en_passant_file { //if there was an en passant file in the previous position,
-            self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_EN_PASSANT[file as usize]; //remove it from the hash
+        if let Some(file) = self.stack.iter().rev().nth(1).unwrap().en_passant_file { //if there was an en passant file in the previous position,
+            self.mut_stack_frame().hash ^= Self::ZOBRIST_EN_PASSANT[file as usize]; //remove it from the hash
         }
 
-        if let Some(file) = self.stack.last().unwrap().en_passant_file { //if there is an en passant file in the current position,
-            self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_EN_PASSANT[file as usize]; //add it to the hash
+        if let Some(file) = self.stack_frame().en_passant_file { //if there is an en passant file in the current position,
+            self.mut_stack_frame().hash ^= Self::ZOBRIST_EN_PASSANT[file as usize]; //add it to the hash
         }
 
         
         //update castling rights
         if moved_piece == King {
             if self.current_player == White {
-                self.stack.last_mut().unwrap().castling_rights &= !(1 << CastlingType::WhiteCastleKingside as u8) & !(1 << CastlingType::WhiteCastleQueenside as u8);
+                self.mut_stack_frame().castling_rights &= !(1 << CastlingType::WhiteCastleKingside as u8) & !(1 << CastlingType::WhiteCastleQueenside as u8);
             } else {
-                self.stack.last_mut().unwrap().castling_rights &= !(1 << CastlingType::BlackCastleKingside as u8) & !(1 << CastlingType::BlackCastleQueenside as u8);
+                self.mut_stack_frame().castling_rights &= !(1 << CastlingType::BlackCastleKingside as u8) & !(1 << CastlingType::BlackCastleQueenside as u8);
             }
         }
 
         for i in 0..4 {
             if m.to() == Self::CASTLE_ROOK_FROM[i] || m.from() == Self::CASTLE_ROOK_FROM[i] {
-                self.stack.last_mut().unwrap().castling_rights &= !(1 << i);
+                self.mut_stack_frame().castling_rights &= !(1 << i);
             }
         }
 
         //update zobrist hash for castling rights
-        let prev_castling_rights = self.stack.iter().rev().skip(1).next().unwrap().castling_rights;
-        let current_castling_rights = self.stack.last().unwrap().castling_rights;
-        self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_CASTLING_RIGHT[prev_castling_rights as usize];
-        self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_CASTLING_RIGHT[current_castling_rights as usize];
+        let prev_castling_rights = self.stack.iter().rev().nth(1).unwrap().castling_rights;
+        let current_castling_rights = self.stack_frame().castling_rights;
+        self.mut_stack_frame().hash ^= Self::ZOBRIST_CASTLING_RIGHT[prev_castling_rights as usize];
+        self.mut_stack_frame().hash ^= Self::ZOBRIST_CASTLING_RIGHT[current_castling_rights as usize];
 
 
         if self.current_player == Black {
@@ -479,11 +495,11 @@ impl Position {
         self.current_player = !self.current_player;
 
         //update zobrist hash for current player
-        self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_CURRENT_PLAYER[White as usize];
-        self.stack.last_mut().unwrap().hash ^= Self::ZOBRIST_CURRENT_PLAYER[Black as usize];
+        self.mut_stack_frame().hash ^= Self::ZOBRIST_CURRENT_PLAYER[White as usize];
+        self.mut_stack_frame().hash ^= Self::ZOBRIST_CURRENT_PLAYER[Black as usize];
 
 
-        self.stack.last_mut().unwrap().pinned = self.pinned_pieces();
+        self.mut_stack_frame().pinned = self.pinned_pieces();
     }
     
     pub fn unmake_move(&mut self, m: Move) {
@@ -599,7 +615,7 @@ impl Position {
             };
 
             for castling_type in castling_types.into_iter() {
-                if(self.stack.last().unwrap().castling_rights & (1 << castling_type as u8)) != 0
+                if(self.stack_frame().castling_rights & (1 << castling_type as u8)) != 0
                         && (castling_blockers[castling_type as usize] & self.occupied()).is_empty() {
                     
                     moves.push(Move::new_castling(castling_type));
@@ -608,7 +624,7 @@ impl Position {
         }
 
         //en passant
-        if let Some(file) = self.stack.last().unwrap().en_passant_file {
+        if let Some(file) = self.stack_frame().en_passant_file {
             let (from_rank, to_rank) = if self.current_player == White {
                 (3, 2)
             } else {
@@ -682,11 +698,11 @@ impl Position {
             return !self.is_attacked(castling_squares[c as usize][0], self.current_player) 
                     && !self.is_attacked(castling_squares[c as usize][1], self.current_player);
         
-        } else if self.stack.last().unwrap().pinned.contains(m.from()) {
+        } else if self.stack_frame().pinned.contains(m.from()) {
 
             return Bitboard::is_aligned(self.king_square(self.current_player), m.from(), m.to());
 
-        } else if self.pieces_by_piece_type(King).contains(m.from()) {
+        } else if self.pieces_by_type(King).contains(m.from()) {
 
             return !self.is_attacked(m.to(), self.current_player);
 
@@ -800,11 +816,11 @@ impl Position {
         let mut repetitions = 0;
 
         for (i, hash) in self.stack.iter().rev().map(|i| i.hash).enumerate().step_by(2).skip(1) {
-            if i > self.stack.last().unwrap().half_move_clock as usize{
+            if i > self.stack_frame().half_move_clock as usize{
                 break;
             }
 
-            if hash == self.stack.last().unwrap().hash {
+            if hash == self.stack_frame().hash {
                 if i <= ply as usize {
                     return true;
                 }
@@ -821,10 +837,10 @@ impl Position {
 
      
     pub fn insufficient_material(&self) -> bool {
-        let major_pieces = (self.pieces_by_piece_type(Rook) | self.pieces_by_piece_type(Queen)).count_squares();
-        let bishops = self.pieces_by_piece_type(Bishop).count_squares();
-        let knights = self.pieces_by_piece_type(Knight).count_squares();
-        let pawns = self.pieces_by_piece_type(Pawn).count_squares();
+        let major_pieces = (self.pieces_by_type(Rook) | self.pieces_by_type(Queen)).count_squares();
+        let bishops = self.pieces_by_type(Bishop).count_squares();
+        let knights = self.pieces_by_type(Knight).count_squares();
+        let pawns = self.pieces_by_type(Pawn).count_squares();
 
         if major_pieces == 0 && pawns == 0 {
             //king vs king + knight and king vs king + bishop
@@ -833,7 +849,7 @@ impl Position {
             }
 
             if bishops == 2 && self.pieces(Bishop, White).count_squares() == 1 //each player has one bishop
-                    && (Self::LIGHT_SQUARES & self.pieces_by_piece_type(Bishop)).count_squares() != 1 { //the bishops are on same colored squares
+                    && (Self::LIGHT_SQUARES & self.pieces_by_type(Bishop)).count_squares() != 1 { //the bishops are on same colored squares
                 return true;
             }
         }
@@ -908,9 +924,9 @@ impl Position {
             }
         }
 
-        hash ^= Self::ZOBRIST_CASTLING_RIGHT[self.stack.last().unwrap().castling_rights as usize];
+        hash ^= Self::ZOBRIST_CASTLING_RIGHT[self.stack_frame().castling_rights as usize];
         
-        if let Some(e) = self.stack.last().unwrap().en_passant_file {
+        if let Some(e) = self.stack_frame().en_passant_file {
             hash ^= Self::ZOBRIST_EN_PASSANT[e as usize];
         }
 

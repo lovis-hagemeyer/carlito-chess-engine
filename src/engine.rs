@@ -1,4 +1,3 @@
-use std::collections::btree_map::Entry;
 use std::sync::{atomic, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -14,11 +13,10 @@ use timer::Timer;
 use score::Score;
 use ttable::{TTable, EntryType};
 
-use crate::{chess_move::*, position};
+use crate::chess_move::*;
 use crate::position::*;
 
 use self::eval::Evaluator;
-use self::ttable::TTableEntry;
 
 pub struct Engine {
     thread_data: Option<Arc<ThreadData>>,
@@ -463,15 +461,13 @@ impl MoveSorter {
     }
 
     fn lva_mvv_values(position: &mut Position, m: Move) -> u8 {
-        //println!("move: {}", m);
+
         let values = [1,3,3,5,9,0,1]; //Piece::NoPiece as usize == 7  =>  en passant captures have a victim value of 1
         
         let victim_value = values[position.piece_on(m.to()) as usize];
         let attacker_value = values[position.piece_on(m.from()) as usize];
 
-        //println!("{victim_value}, {attacker_value}");
-
-        return 16*victim_value - attacker_value;
+        16*victim_value - attacker_value
     }
 
     fn sort_captures(position: &mut Position, moves: &mut [Move]) {
@@ -483,8 +479,6 @@ impl MoveSorter {
                 moves.swap(i, move_scores.len()-1);
             }
         }
-
-        //println!("{:?}", move_scores);
 
         for i in 1..move_scores.len() {
             let score = move_scores[i];
@@ -501,7 +495,7 @@ impl MoveSorter {
             }
             
             moves[index] = m;
-            move_scores[index as usize] = score;
+            move_scores[index] = score;
         }
     }
 }

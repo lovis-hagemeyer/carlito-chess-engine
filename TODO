@@ -1,5 +1,4 @@
 clean code:
-- no (public) uci-handler object
 - new type for square?
 - Option<Piece> intead of Piece::NoPiece ?
 - consistent Player/Color nomenclature
@@ -19,7 +18,7 @@ ai:
 roadmap: 
 - eval function (testing after every implemented position feature)
 - ttable mate values
-- pv output         
+- pv output 
 - checks (and promotions ?) in quiscence search 
 - implement searchmoves command
 

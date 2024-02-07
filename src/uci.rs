@@ -1,6 +1,5 @@
 use std::io;
 
-use crate::position;
 use crate::position::*;
 use crate::chess_move::*;
 use crate::engine::*;
@@ -11,7 +10,12 @@ const AUTHOR: &str = "Lovis Hagemeyer";
 const DEFAULT_TABLE_SIZE: usize = 64;
 
 
-pub struct UciHandler {
+pub fn input_loop() {
+    UciHandler::new().input_loop();
+}
+
+
+struct UciHandler {
     position: Position,
     engine: Engine
 }
