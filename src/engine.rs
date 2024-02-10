@@ -68,6 +68,8 @@ pub struct EngineOptions {
 }
 
 impl Engine {
+    const MAX_PV_LENGTH: usize = 20;
+
     pub fn new(mb_table_size: usize) -> Engine {
         Engine {
             thread_data: None,
@@ -162,7 +164,7 @@ impl Engine {
                 Some(s) => s
             };
 
-            pv = data.pv;
+            pv = Self::extract_pv(&mut position, &mut data.ttable);
 
             let search_time = Instant::now().duration_since(thread_data.start_time);
             let search_time_ms = search_time.as_millis() as u64;
@@ -392,6 +394,29 @@ impl Engine {
         }
 
         Some(alpha)
+    }
+
+    fn extract_pv(pos: &mut Position, ttable: &mut TTable) -> Vec<Move> {
+        let mut pv = Vec::new();
+        
+        for _ in 0..Engine::MAX_PV_LENGTH {
+            if let Some(entry) = ttable.lookup(pos.hash()) {
+                if entry.entry_type == EntryType::Exact {
+                    pv.push(entry.best_move);
+                    pos.make_move(entry.best_move);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        for m in pv.iter().rev() {
+            pos.unmake_move(*m);
+        }
+
+        pv
     }
 
     //TODO:
