@@ -42,7 +42,7 @@ impl Timer {
         }
     }
 
-    fn calculate_min_max_time(thread_data: &ThreadData) -> Option<(u32, u32)> {
+    fn calculate_min_max_time(thread_data: &ThreadData) -> Option<(u64, u64)> {
         if let Some(move_time) = thread_data.options.move_time {
             Some((move_time, move_time))
         } else {

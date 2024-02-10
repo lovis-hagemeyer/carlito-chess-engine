@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::io;
+use std::num::IntErrorKind;
+use std::num::ParseIntError;
 
 use crate::position::*;
 use crate::chess_move::*;
@@ -139,7 +141,7 @@ impl UciHandler {
                 "perft" => { 
                     let depth = Self::parse_int_arg(tokens, "perft");
                     if let Some(depth) = depth {
-                        Self::split_perft(&mut self.position, depth);
+                        Self::split_perft(&mut self.position, depth.clamp(0, u32::MAX as u64) as u32);
                     }
                     return;
                 }
@@ -217,14 +219,20 @@ impl UciHandler {
         self.position = new_position;
     }
 
-    fn parse_int_arg<'a, I: Iterator<Item = &'a str>>(tokens: &mut I, last_token: &str) -> Option<u32> {
+    fn parse_int_arg<'a, I: Iterator<Item = &'a str>>(tokens: &mut I, last_token: &str) -> Option<u64> {
         match tokens.next() {
-            Some(s) => match Position::parse_int(s, u32::MAX/10) {
+            Some(s) => match u64::from_str_radix(s, 10) {
                 Ok(i) => Some(i),
-                Err(_) => {
-                    eprintln!("expected integer after '{last_token}', got: '{s}");
-                    None
+                Err(e) => match e.kind() {
+                    IntErrorKind::PosOverflow => {
+                        Some(u64::MAX)
+                    },
+                    _ => {
+                        eprintln!("expected positive integer after '{last_token}', got: '{s}");
+                        None
+                    }
                 }
+                
             },
             None => {
                 eprintln!("expected argument after '{last_token}'");

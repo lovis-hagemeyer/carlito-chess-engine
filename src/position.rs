@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::num::IntErrorKind;
 
 use crate::bitboard::*;
 use crate::chess_move::*;
@@ -172,8 +173,8 @@ impl Position {
         p.parse_castling(sections.next().ok_or(())?)?;
         p.parse_en_passant(sections.next().ok_or(())?)?;
 
-        p.mut_stack_frame().half_move_clock = Self::parse_int(sections.next().ok_or(())?, u32::MAX/10)?;
-        p.full_move_clock = Self::parse_int(sections.next().ok_or(())?, u32::MAX/10)?;
+        p.mut_stack_frame().half_move_clock = Self::parse_int(sections.next().ok_or(())?)?.clamp(0, (u32::MAX/2) as u64) as u32;
+        p.full_move_clock = Self::parse_int(sections.next().ok_or(())?)?.clamp(0, (u32::MAX/2) as u64) as u32;
 
         if sections.next().is_some() {
             return Err(());
@@ -183,6 +184,16 @@ impl Position {
         p.mut_stack_frame().hash = p.calculate_hash();
 
         Ok(p)
+    }
+
+    pub fn parse_int(s: &str) -> Result<u64, ()> {
+        match u64::from_str_radix(s, 10) {
+            Ok(res) => Ok(res),
+            Err(e) => match e.kind() {
+                IntErrorKind::PosOverflow => Ok(u64::MAX),
+                _ => Err(())
+            }
+        }
     }
 
     fn parse_board(&mut self, s: &str) -> Result<(), ()> {
@@ -322,23 +333,6 @@ impl Position {
         }
 
         Ok(())
-    }
-
-    pub fn parse_int(s: &str, max_val: u32) -> Result<u32, ()> {
-        let mut res: u32 = 0;
-        
-        for c in s.chars() {
-            if let Some(d) = c.to_digit(10) {
-                res = res.saturating_mul(10);
-                res = res.saturating_add(d);
-
-                res = res.min(max_val);
-            } else {
-                return Err(());
-            }
-        }
-
-        Ok(res)
     }
 
     pub fn parse_square(s: &str) -> Result<u8, ()> {

@@ -56,15 +56,15 @@ pub struct EngineOptions {
     pub search_moves: Vec<Move>,
     pub ponder: bool,
     pub infinite: bool,
-    pub wtime: Option<u32>,
-    pub btime: Option<u32>,
-    pub winc: Option<u32>,
-    pub binc: Option<u32>,
-    pub moves_to_go: Option<u32>,
-    pub depth: Option<u32>,
-    pub nodes: Option<u32>,
-    pub mate_in: Option<u32>,
-    pub move_time: Option<u32>
+    pub wtime: Option<u64>,
+    pub btime: Option<u64>,
+    pub winc: Option<u64>,
+    pub binc: Option<u64>,
+    pub moves_to_go: Option<u64>,
+    pub depth: Option<u64>,
+    pub nodes: Option<u64>,
+    pub mate_in: Option<u64>,
+    pub move_time: Option<u64>
 }
 
 impl Engine {
@@ -151,8 +151,7 @@ impl Engine {
             move_sorter: MoveSorter::new(),
             ttable
         };
-        
-        //println!("{:?}", data.evaluator.evaluate(&mut position));
+
 
         let mut pv: Vec<Move> = Vec::new();
 
@@ -204,7 +203,7 @@ impl Engine {
             }
 
             if let Some(max_depth) = thread_data.options.depth {
-                if max_depth == depth as u32{
+                if max_depth == depth as u64 {
                     break;
                 }
             }
@@ -212,7 +211,12 @@ impl Engine {
             depth += 1;
         }
 
-        print!("bestmove {}", pv[0]);
+        print!("bestmove");
+        if pv.len() > 0 {
+            print!(" {}", pv[0]);
+        } else {
+            print!(" {}", thread_data.position.clone().legal_moves()[0])
+        }
         if pv.len() > 1 {
             print!(" ponder {}", pv[1]);
         }
@@ -229,8 +233,7 @@ impl Engine {
 
         data.nodes += 1;
 
-        //TODO nodes option should be u64
-        if (thread_data.options.nodes.unwrap_or(u32::MAX) as u64) < data.nodes {
+        if thread_data.options.nodes.unwrap_or(u64::MAX) < data.nodes {
             return None
         }
 
@@ -341,8 +344,7 @@ impl Engine {
 
         data.nodes += 1;
 
-        //TODO nodes option should be u64
-        if (thread_data.options.nodes.unwrap_or(u32::MAX) as u64) < data.nodes {
+        if thread_data.options.nodes.unwrap_or(u64::MAX) < data.nodes {
             return None
         }
 
