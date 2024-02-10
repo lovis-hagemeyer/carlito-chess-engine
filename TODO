@@ -4,13 +4,11 @@ clean code:
 - consistent Player/Color nomenclature
 
 testing:
-- perft and zobrist hash testing with hashmap
 - (write test functions with macros for prettier output and multithreading when using cargo test)
 
 ai:
 - uci option for draw score
 - better ttable replacement scheme
-- pv output
 - mate values in ttable
 - position table missing draws mitigation
 

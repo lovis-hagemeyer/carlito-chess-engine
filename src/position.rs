@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::bitboard::*;
 use crate::chess_move::*;
 
@@ -940,18 +942,28 @@ impl Position {
      * perft function
      */
 
-    pub fn perft(&mut self, depth: u32) -> u64{
+    pub fn perft(&mut self, depth: u32) -> u64 {
+        self.perft_with_hash_map(depth, &mut HashMap::new())
+    }
+
+    pub fn perft_with_hash_map(&mut self, depth: u32, hash_map: &mut HashMap<(u64, u32), u64>) -> u64 {
         if depth == 0 {
             1
         } else if depth == 1 {
             self.legal_moves().len() as u64
         } else {
+            if let Some(res) = hash_map.get(&(self.hash(), depth)) {
+                return *res;
+            }
+
             let mut result = 0;
             for m in self.legal_moves().into_iter() {
                 self.make_move(m);
-                result += self.perft(depth-1);
+                result += self.perft_with_hash_map(depth-1,hash_map);
                 self.unmake_move(m);
             }
+
+            hash_map.insert((self.hash(), depth), result);
     
             result
         }

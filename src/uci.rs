@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 
 use crate::position::*;
@@ -237,11 +238,12 @@ impl UciHandler {
             println!("1");
         } else {
             let mut result = 0;
+            let mut hash_map = HashMap::new();
             for m in pos.legal_moves().into_iter() {
     
                 pos.make_move(m);
                 
-                let child_nodes = pos.perft(depth-1);
+                let child_nodes = pos.perft_with_hash_map(depth-1, &mut hash_map);
                 println!("{}: {child_nodes}", m);
                 result += child_nodes;
 
