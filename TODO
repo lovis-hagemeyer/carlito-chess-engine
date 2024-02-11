@@ -18,7 +18,12 @@ roadmap:
 - checks (and promotions ?) in quiscence search 
 
 
+issues:
+- full move clock in undo move
 
+
+testing
+- promotions in qsearch? 
 
 test results:
 

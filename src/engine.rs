@@ -381,13 +381,25 @@ impl Engine {
 
             if !in_check {
 
-                if !position.is_capture(m) {
+                if !position.is_capture(m) && !m.promote_to().is_some() {
                     continue;
                 }
 
-                let victim = position.piece_on(m.to());
-                let victim_value = data.evaluator.params().material[ if victim == Piece::NoPiece { Piece::Pawn } else { victim } as usize ];
-                if standing_pat + Score::from_centi_pawns(victim_value) + Score::from_centi_pawns(200) <= alpha {
+                let mut material_change = if m.is_en_passant() {
+                    data.evaluator.params().material[Piece::Pawn as usize]
+                } else if position.piece_on(m.to()) == Piece::NoPiece {
+                    0
+                } else {
+                    data.evaluator.params().material[position.piece_on(m.to()) as usize]
+                };
+
+                material_change += match m.promote_to() {
+                    None => 0,
+                    Some(p) => data.evaluator.params().material[p as usize]
+                };
+
+
+                if standing_pat + Score::from_centi_pawns(material_change) + Score::from_centi_pawns(200) <= alpha {
                     continue;
                 }
             }
