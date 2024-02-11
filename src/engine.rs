@@ -152,6 +152,7 @@ impl Engine {
             ttable
         };
 
+        println!("{}", position.in_check());
 
         let mut pv: Vec<Move> = Vec::new();
 
@@ -362,26 +363,33 @@ impl Engine {
             return Some(DRAW_SCORE);
         }
 
+        let in_check = position.in_check();
+
         let standing_pat = data.evaluator.evaluate(position);
 
-        if standing_pat >= beta {
-            return Some(standing_pat);
-        }
-        if standing_pat > alpha {
-            alpha = standing_pat;
+        if !in_check {
+            if standing_pat >= beta {
+                return Some(standing_pat);
+            }
+            if standing_pat > alpha {
+                alpha = standing_pat;
+            }
         }
 
         let moves = position.legal_moves();
         for m in MoveSorter::sort_qsearch(position, moves).into_iter() {
 
-            if !position.is_capture(m) {
-                continue;
-            }
+            if !in_check {
 
-            let victim = position.piece_on(m.to());
-            let victim_value = data.evaluator.params().material[ if victim == Piece::NoPiece { Piece::Pawn } else { victim } as usize ];
-            if standing_pat + Score::from_centi_pawns(victim_value) + Score::from_centi_pawns(200) <= alpha {
-                continue;
+                if !position.is_capture(m) {
+                    continue;
+                }
+
+                let victim = position.piece_on(m.to());
+                let victim_value = data.evaluator.params().material[ if victim == Piece::NoPiece { Piece::Pawn } else { victim } as usize ];
+                if standing_pat + Score::from_centi_pawns(victim_value) + Score::from_centi_pawns(200) <= alpha {
+                    continue;
+                }
             }
 
             position.make_move(m);

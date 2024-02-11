@@ -144,6 +144,11 @@ impl Position {
         self.stack.last_mut().expect("missing position stack frame. Did you undo a move in an initial position?")
     }
 
+
+    pub fn in_check(&self) -> bool {
+        self.is_attacked(self.king_square(self.current_player()), self.current_player())
+    }
+
     /*
      * fen parsing
      */

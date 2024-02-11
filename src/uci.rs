@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::io;
 use std::num::IntErrorKind;
-use std::num::ParseIntError;
 
 use crate::position::*;
 use crate::chess_move::*;

@@ -22,6 +22,8 @@ roadmap:
 
 test results:
 
+- 'check in qsearch' vs sf 3:                                                   [0.640] ELO: 100.0 +/- 21.7 //TODO confirm
+
 evaluation function tests: 
 - 'ps + m + s,i,p pawns + kar + k a + o + bp + (half)open rook file' vs sf 3:   [0.595] ELO: 67.0 +/- 15.4
 - 'ps + m + s,i,p pawns + kar + k a + outposts + bishop pair' vs stockfish 3:   [0.590] ELO: 63.5 +/- 12.3
