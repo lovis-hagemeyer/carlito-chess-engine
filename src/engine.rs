@@ -315,6 +315,7 @@ impl Engine {
             if    !pv_node 
                && depth == 1
                && !is_capture 
+               && m.promote_to().is_none()
                && !in_check 
                && !position.in_check() 
                && static_eval + Self::FUTILITY_MARGIN <= alpha {
