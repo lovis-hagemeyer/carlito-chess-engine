@@ -71,7 +71,7 @@ impl UciHandler {
         println!("id name {NAME}");
         println!("id author {AUTHOR}");
 
-        println!("option name Hash type spin default 256 min 1 max 4096");
+        println!("option name Hash type spin default {DEFAULT_TABLE_SIZE} min 1 max 4096");
         println!("option name Ponder type check default true");
 
         println!("uciok");
