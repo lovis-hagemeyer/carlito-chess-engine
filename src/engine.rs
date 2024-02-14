@@ -1,3 +1,4 @@
+use std::os::linux::raw::stat;
 use std::sync::{atomic, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -69,6 +70,8 @@ pub struct EngineOptions {
 
 impl Engine {
     const MAX_PV_LENGTH: usize = 20;
+    const FUTILITY_MARGIN: Score = Score { s: 100 };
+
 
     pub fn new(mb_table_size: usize) -> Engine {
         Engine {
@@ -248,8 +251,11 @@ impl Engine {
             position.legal_moves().into_iter().filter(|m| thread_data.options.search_moves.contains(m)).collect()
         };
 
+
+        let in_check = position.in_check();
+
         if moves.is_empty() {
-            if position.is_attacked(position.king_square(position.current_player()), position.current_player()) {
+            if in_check {
                 return Some(Score::from_mate_distance(-(((ply+1)/2) as i16)));
             } else {
                 return Some(DRAW_SCORE);
@@ -290,10 +296,32 @@ impl Engine {
             ttable_move = None;
         }
 
+        let mut static_eval = Score::from_centi_pawns(0);
+
+        if depth == 1 {
+            static_eval = data.evaluator.evaluate(position);
+        }
+
         let mut best_move = moves[0];
 
         for (i, m) in data.move_sorter.sort(position, moves, ply, ttable_move).into_iter().enumerate() {
+
+            let is_capture = position.is_capture(m);
+
             position.make_move(m);
+            
+
+            //futility pruning
+            if    !pv_node 
+               && depth == 1
+               && !is_capture 
+               && !in_check 
+               && !position.in_check() 
+               && static_eval + Self::FUTILITY_MARGIN <= alpha {
+                
+                position.unmake_move(m);
+                continue;
+            }
 
             let mut move_score;
             

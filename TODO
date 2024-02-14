@@ -11,6 +11,7 @@ ai:
 - better ttable replacement scheme
 - mate values in ttable
 - position table missing draws mitigation
+- recognizing check moves without making move? (blocker tables?)
 
 
 roadmap: 
