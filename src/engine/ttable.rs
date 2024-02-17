@@ -5,7 +5,7 @@ use crate::chess_move::Move;
 use super::score::Score;
 
 pub struct TTable {
-    table: Vec<TTableEntry> 
+    table: Vec<Bucket> 
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -15,7 +15,7 @@ pub enum EntryType {
     Lower
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub struct TTableEntry {
     pub hash: u64,
     pub entry_type: EntryType,
@@ -23,6 +23,13 @@ pub struct TTableEntry {
     pub best_move: Move,
     pub depth: u16
 }
+
+#[derive(Clone)]
+#[repr(align(64))] // buckets should align with cache lines
+struct Bucket {
+    pub entries: [TTableEntry; 4]
+}
+
 
 impl TTableEntry {
     fn new() -> TTableEntry {
@@ -36,36 +43,69 @@ impl TTableEntry {
     }
 }
 
+impl Bucket {
+    fn new() -> Bucket {
+        Bucket {
+            entries: [TTableEntry::new(); 4]
+        }
+    }
+}
+
 impl TTable {
     pub fn new(mb_size: usize) -> TTable {
         TTable {
-            table: vec![TTableEntry::new(); mb_size * (1<<20) / size_of::<TTableEntry>()] //new table with size MiB
+            table: vec![Bucket::new(); mb_size * (1<<20) / size_of::<Bucket>()] //new table with size MiB
         }
     }
 
     pub fn mb_size(&self) -> usize {
-        self.table.len() / (1<<20) * size_of::<TTableEntry>()
+        self.table.len() / (1<<20) * size_of::<Bucket>()
     }
 
     pub fn lookup(&self, hash: u64) -> Option<&TTableEntry> {
         let index = hash as usize % self.table.len();
 
-        if self.table[index].hash == hash {
-            Some(&self.table[index])
-        } else {
-            None
+        for entry in self.table[index].entries.iter() {
+            if entry.hash == hash {
+                return Some(entry);
+            } 
         }
+
+        None
     }
 
     pub fn insert(&mut self, hash: u64, entry_type: EntryType, score: Score, best_move: Move, depth: u16) {
         let index = hash as usize % self.table.len();
         
-        self.table[index] = TTableEntry {
+        //replacement strategy: always replace entry with smallest depth
+       // let (bucket_index, _) = self.table[index].entries.iter().map(|e| e.depth).enumerate().fold((0,0), |(i1, d1), (i2, d2)| if i1 > i2 { (i1,d1) } else { (i2, d2) } );
+        
+        let (mut bucket_index, mut smallest_depth) = (0, u16::MAX);
+    
+        for (i, entry) in self.table[index].entries.iter().enumerate() {
+            if entry.hash == hash {
+                bucket_index = i;
+                break;
+            }
+            
+            if entry.depth < smallest_depth {
+                smallest_depth = entry.depth;
+                bucket_index = i;
+            }
+        }
+
+        self.table[index].entries[bucket_index] = TTableEntry {
             hash,
             entry_type,
             score,
             best_move,
             depth
+        }
+    }
+    
+    pub fn clear(&mut self) {
+        for b in self.table.iter_mut() {
+            *b = Bucket::new();
         }
     }
 }

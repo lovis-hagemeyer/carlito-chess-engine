@@ -53,6 +53,7 @@ impl UciHandler {
                     }
                     self.engine.ponderhit();
                 },
+                Some("ucinewgame") => { self.engine.clear_table() }
                 Some("quit") => return,
                 Some("uci") => (),
                 Some(s) => eprintln!("unknown command: {s}"),

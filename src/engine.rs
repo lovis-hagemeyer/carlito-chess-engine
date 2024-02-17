@@ -136,6 +136,12 @@ impl Engine {
         }
     }
 
+    pub fn clear_table(&mut self) {
+        if let Some(table) = self.ttable.as_mut() {
+            table.clear();
+        }
+    }
+
     fn analyze(thread_data: Arc<ThreadData>, ttable: TTable) -> TTable {       
 
         //TODO check for mate in start position
