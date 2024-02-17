@@ -215,7 +215,6 @@ impl Evaluator {
     }
     
     pub fn evaluate(&mut self, pos: &mut Position) -> Score {
-        //let mut score = self.material(pos, White) - self.material(pos, Black);
         
         //initialise fields for king danger evaluation.
         self.king_safety = [0,0];
