@@ -62,8 +62,6 @@ pub struct Position {
     
     color_bb: [Bitboard; 2],
 
-    full_move_clock: u32,
-
     current_player: Color,
 
     stack: Vec<StackFrame>,
@@ -158,7 +156,6 @@ impl Position {
             squares: [NoPiece; 64],
             piece_bb: [Bitboard::from_u64(0); 6],
             color_bb: [Bitboard::from_u64(0); 2],
-            full_move_clock: 0,
             current_player: White,
             stack: vec![StackFrame {
                 castling_rights: 0,
@@ -179,7 +176,7 @@ impl Position {
         p.parse_en_passant(sections.next().ok_or(())?)?;
 
         p.mut_stack_frame().half_move_clock = Self::parse_int(sections.next().ok_or(())?)?.clamp(0, (u32::MAX/2) as u64) as u32;
-        p.full_move_clock = Self::parse_int(sections.next().ok_or(())?)?.clamp(0, (u32::MAX/2) as u64) as u32;
+        Self::parse_int(sections.next().ok_or(())?)?.clamp(0, (u32::MAX/2) as u64) as u32;
 
         if sections.next().is_some() {
             return Err(());
@@ -488,11 +485,7 @@ impl Position {
         self.mut_stack_frame().hash ^= Self::ZOBRIST_CASTLING_RIGHT[prev_castling_rights as usize];
         self.mut_stack_frame().hash ^= Self::ZOBRIST_CASTLING_RIGHT[current_castling_rights as usize];
 
-
-        if self.current_player == Black {
-            self.full_move_clock += 1;
-        }
-
+        
         self.current_player = !self.current_player;
 
         //update zobrist hash for current player
