@@ -253,7 +253,7 @@ impl Engine {
         };
 
         if moves.is_empty() {
-            if position.is_attacked(position.king_square(position.current_player()), position.current_player()) {
+            if position.in_check() {
                 return Some(Score::from_mate_distance(-(((ply+1)/2) as i16)));
             } else {
                 return Some(DRAW_SCORE);
@@ -356,7 +356,7 @@ impl Engine {
         let moves = position.legal_moves();
         
         if moves.is_empty() {
-            if position.is_attacked(position.king_square(position.current_player()), position.current_player()) {
+            if position.in_check() {
                 return Some(Score::from_mate_distance(-(((ply+1)/2) as i16)));
             } else {
                 return Some(DRAW_SCORE);

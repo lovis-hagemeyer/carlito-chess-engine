@@ -679,7 +679,7 @@ impl Position {
             self.color_bb[self.current_player as usize] |= Bitboard::from_square(m.to());
             self.color_bb[!self.current_player as usize] &= !Bitboard::from_square(captured_pawn_square);
 
-            let res = !self.is_attacked(self.king_square(self.current_player), self.current_player);
+            let res = !self.in_check();// !self.is_attacked(self.king_square(self.current_player), self.current_player);
 
             self.piece_bb[Pawn as usize] = tmp1;
             self.color_bb[0] = tmp2;
