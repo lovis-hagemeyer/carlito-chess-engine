@@ -9,8 +9,9 @@ use crate::engine::*;
 const NAME: &str = "Carlito Chess Engine";
 const AUTHOR: &str = "Lovis Hagemeyer";
 
-const DEFAULT_TABLE_SIZE: usize = 64;
-
+const DEFAULT_TTABLE_SIZE: usize = 64;
+const MIN_TTABLE_SIZE: usize = 1;
+const MAX_TTABLE_SIZE: usize = 4096;
 
 pub fn input_loop() {
     UciHandler::new().input_loop();
@@ -26,7 +27,7 @@ impl UciHandler {
     pub fn new() -> UciHandler {
         UciHandler {
             position: Position::new(),
-            engine: Engine::new(DEFAULT_TABLE_SIZE)
+            engine: Engine::new(DEFAULT_TTABLE_SIZE)
         }
     }
 
@@ -72,7 +73,7 @@ impl UciHandler {
         println!("id name {NAME}");
         println!("id author {AUTHOR}");
 
-        println!("option name Hash type spin default {DEFAULT_TABLE_SIZE} min 1 max 4096");
+        println!("option name Hash type spin default {DEFAULT_TTABLE_SIZE} min {MIN_TTABLE_SIZE} max {MAX_TTABLE_SIZE}");
         println!("option name Ponder type check default true");
 
         println!("uciok");
@@ -93,7 +94,11 @@ impl UciHandler {
                 }
 
                 if let Some(n) = Self::parse_int_arg(tokens, "value") {
-                    self.engine.set_table_size(n as usize); 
+                    if n as usize >= MIN_TTABLE_SIZE && n as usize <= MAX_TTABLE_SIZE {
+                        self.engine.set_table_size(n as usize); 
+                    } else {
+                        eprintln!("value out of bounds. Please select a value between {MIN_TTABLE_SIZE} and {MAX_TTABLE_SIZE}");
+                    }
                 }
             },
             Some("ponder") => { },
@@ -228,7 +233,7 @@ impl UciHandler {
                         Some(u64::MAX)
                     },
                     _ => {
-                        eprintln!("expected positive integer after '{last_token}', got: '{s}");
+                        eprintln!("expected positive integer after '{last_token}', got: '{s}'");
                         None
                     }
                 }
