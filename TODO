@@ -3,8 +3,6 @@ clean code:
 - Option<Piece> intead of Piece::NoPiece ?
 - consistent Player/Color nomenclature
 
-testing:
-- (write test functions with macros for prettier output and multithreading when using cargo test)
 
 ai:
 - uci option for draw score
@@ -15,11 +13,6 @@ ai:
 
 roadmap: 
 - ttable mate values
-- checks (and promotions ?) in quiscence search 
-
-
-issues:
-- full move clock in undo move
 
 
 testing
