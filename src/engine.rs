@@ -158,8 +158,6 @@ impl Engine {
             ttable
         };
 
-        println!("{}", position.in_check());
-
         let mut pv: Vec<Move> = Vec::new();
 
         loop {

@@ -78,8 +78,7 @@ impl TTable {
         let index = hash as usize % self.table.len();
         
         //replacement strategy: always replace entry with smallest depth
-       // let (bucket_index, _) = self.table[index].entries.iter().map(|e| e.depth).enumerate().fold((0,0), |(i1, d1), (i2, d2)| if i1 > i2 { (i1,d1) } else { (i2, d2) } );
-        
+ 
         let (mut bucket_index, mut smallest_depth) = (0, u16::MAX);
     
         for (i, entry) in self.table[index].entries.iter().enumerate() {
