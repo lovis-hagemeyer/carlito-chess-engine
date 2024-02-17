@@ -542,7 +542,7 @@ impl Position {
     }
 
     fn pseudo_legal_moves(&self) -> Vec<Move> {
-        let mut moves = Vec::new();
+        let mut moves = Vec::with_capacity(50);
 
         let target_squares = self.check_blocking_squares(self.current_player);
 
