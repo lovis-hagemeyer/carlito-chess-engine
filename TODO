@@ -1,36 +1,20 @@
-clean code:
+functionality/bugs:
+- incorrect ttable mate values
+
+refactoring:
 - new type for square?
 - Option<Piece> intead of Piece::NoPiece ?
 - consistent Player/Color nomenclature
 
-
-ai:
+ai/algorithm:
 - uci option for draw score
 - better ttable replacement scheme
 - mate values in ttable
 - position table missing draws mitigation
 
-
-roadmap: 
-- ttable mate values
-
+performance:
+- use pseudo legal move generator in search function
+- reuse move vectors in move generation for less dynamic allocations
 
 testing
 - promotions in qsearch? 
-
-test results:
-
-- 'check in qsearch' vs sf 3:                                                   [0.640] ELO: 100.0 +/- 21.7 //TODO confirm
-
-evaluation function tests: 
-- 'ps + m + s,i,p pawns + kar + k a + o + bp + (half)open rook file' vs sf 3:   [0.595] ELO: 67.0 +/- 15.4
-- 'ps + m + s,i,p pawns + kar + k a + outposts + bishop pair' vs stockfish 3:   [0.590] ELO: 63.5 +/- 12.3
-- 'ps + m + s,i,p pawns + kar + k a + outposts' vs stockfish 3:                 [0.585] ELO: 59.6 +/- 12.2
-- 'ps + m + s,i,p pawns + kar + king attackers+defenders' vs stockfish 3:       [0.566] ELO: 45.8 +/- 12.2 
-- 'ps + m + s,i,p pawns + king attack rays + king attackers' vs stockfish 3:    [0.585] ELO: 59.6 +/- 15.0
-- 'piece square + mobility + s,i,p pawns + king attack rays' vs stockfish 3:    [0.572] ELO: 50.4 +/- 12.2
-- 'piece square + mobility + s+i pawns + passed pawns' vs stockfish 3:          [0.550] ELO: 34.9 +/- 21.0
-- 'piece square + mobility + stacked and isolated pawns' vs stockfish 3:        [0.547] ELO: 32.8 +/- 21.2
-- 'piece square + mobility with pawn control' vs stockfish 3:                   [0.558] ELO: 40.8 +/- 21.0
-- 'piece square + mobility without pawn control' vs stockfish 3:                [0.540] ELO: 27.9 +/- 20.9
-- 'piece square only' vs stockfish 3:                                           [0.519] ELO: 13.2 +/- 23.6
